@@ -11,11 +11,10 @@ DB_PASSWORD = "97mISQEJOcIoKlSg"
 
 @st.cache_resource
 def get_engine():
-    connection_string = (
+    return create_engine(
         f"postgresql://postgres.{PROJECT_REF}:{DB_PASSWORD}"
         f"@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres"
     )
-    return create_engine(connection_string)
 
 WATCHLIST = {
     "2330": "TSMC", "2317": "Hon Hai", "6669": "Wiwynn", "3231": "Wistron",
@@ -46,23 +45,46 @@ def load_revenue():
 @st.cache_data
 def load_prices():
     engine = get_engine()
-    symbols = "','".join([f"{k}.TW" for k in WATCHLIST.keys()])
+    symbols_tw = "','".join([f"{k}.TW" for k in WATCHLIST.keys()])
+    symbols_two = "','".join([f"{k}.TWO" for k in WATCHLIST.keys()])
     df = pd.read_sql(f"""
-        SELECT report_month, symbol, m_open, m_close
-        FROM stock_monthly_k
-        WHERE symbol IN ('{symbols}')
-        ORDER BY symbol, report_month
+        SELECT date, symbol, open, close
+        FROM stock_prices
+        WHERE symbol IN ('{symbols_tw}', '{symbols_two}')
+        ORDER BY symbol, date
     """, engine)
     df["stock_id"] = df["symbol"].str.replace(".TW", "").str.replace(".TWO", "")
-    df["date"] = pd.to_datetime(
-        df["report_month"].apply(lambda x: f"{int(x.split('_')[0])+1911}-{x.split('_')[1]}-01")
+    df["date"] = pd.to_datetime(df["date"])
+    df["month"] = df["date"].dt.to_period("M").dt.to_timestamp()
+    monthly = df.groupby(["stock_id", "month"]).agg(
+        m_open=("open", "first"),
+        m_close=("close", "last")
+    ).reset_index()
+    return monthly
+
+@st.cache_data
+def load_annual():
+    engine = get_engine()
+    symbols = "','".join(
+        [f"{k}.TW" for k in WATCHLIST.keys()] +
+        [f"{k}.TWO" for k in WATCHLIST.keys()]
     )
+    df = pd.read_sql(f"""
+        SELECT symbol, year, year_open, year_close, year_high, year_low
+        FROM stock_annual_k2
+        WHERE symbol IN ('{symbols}')
+        ORDER BY symbol, year
+    """, engine)
+    df["stock_id"] = df["symbol"].str.replace(".TW", "").str.replace(".TWO", "")
+    df["company"] = df["stock_id"].map(WATCHLIST)
+    df["annual_return"] = ((df["year_close"] - df["year_open"]) / df["year_open"] * 100).round(1)
     return df
 
 st.title("Taiwan Stock Dashboard")
 
 rev_df = load_revenue()
 price_df = load_prices()
+annual_df = load_annual()
 
 with st.sidebar:
     st.header("Filter")
@@ -105,8 +127,7 @@ with tab3:
     if len(selected) == 1:
         sid = selected[0]
         rev = rev_df[rev_df["stock_id"] == sid][["date", "yoy_pct"]].dropna()
-        price = price_df[price_df["stock_id"] == sid][["date", "m_close"]]
-        price["date"] = pd.to_datetime(price["date"])
+        price = price_df[price_df["stock_id"] == sid][["month", "m_close"]].rename(columns={"month": "date"})
         merged = pd.merge(rev, price, on="date", how="inner")
         merged["price_chg"] = merged["m_close"].pct_change() * 100
         fig = go.Figure()
@@ -114,9 +135,13 @@ with tab3:
                                  name="Revenue YoY %", line=dict(color="#1D9E75")))
         fig.add_trace(go.Scatter(x=merged["date"], y=merged["price_chg"],
                                  name="Price MoM %", line=dict(color="#378ADD"), yaxis="y2"))
-        fig.update_layout(yaxis2=dict(overlaying="y", side="right"),
-                          title=f"{sid} {WATCHLIST[sid]}")
+        fig.update_layout(
+            yaxis2=dict(overlaying="y", side="right"),
+            title=f"{sid} {WATCHLIST[sid]}"
+        )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Select a single stock in the sidebar to see the revenue vs price chart.")
-      
+        ann = annual_df[annual_df["stock_id"].isin(selected)]
+        fig = px.bar(ann, x="year", y="annual_return", color="company", barmode="group",
+                     labels={"annual_return": "Annual Return %", "year": "Year"},
+                     t
