@@ -48,13 +48,15 @@ def load_prices():
     engine = get_engine()
     symbols = "','".join([f"{k}.TW" for k in WATCHLIST.keys()])
     df = pd.read_sql(f"""
-        SELECT date, symbol, m_open, m_close
+        SELECT report_month, symbol, m_open, m_close
         FROM stock_monthly_k
         WHERE symbol IN ('{symbols}')
-        ORDER BY symbol, date
+        ORDER BY symbol, report_month
     """, engine)
     df["stock_id"] = df["symbol"].str.replace(".TW", "").str.replace(".TWO", "")
-    df["date"] = pd.to_datetime(df["date"] + "-01") if df["date"].str.len().max() == 7 else pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(
+        df["report_month"].apply(lambda x: f"{int(x.split('_')[0])+1911}-{x.split('_')[1]}-01")
+    )
     return df
 
 st.title("Taiwan Stock Dashboard")
