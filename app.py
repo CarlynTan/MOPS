@@ -29,13 +29,13 @@ WATCHLIST = {
 @st.cache_data
 def load_revenue():
     engine = get_engine()
-    ids = "','".join(WATCHLIST.keys())
-    df = pd.read_sql(f"""
+    df = pd.read_sql("""
         SELECT stock_id, report_month, rev_current, yoy_pct, mom_pct
         FROM monthly_revenue
-        WHERE stock_id IN ('{ids}')
         ORDER BY stock_id, report_month
     """, engine)
+    df["stock_id"] = df["stock_id"].astype(str)
+    df = df[df["stock_id"].isin(WATCHLIST.keys())]
     df["company"] = df["stock_id"].map(WATCHLIST)
     def roc_to_date(ym):
         try:
@@ -60,7 +60,7 @@ def load_prices():
         WHERE symbol IN ('{symbols_tw}', '{symbols_two}')
         ORDER BY symbol, date
     """, engine)
-    df["stock_id"] = df["symbol"].str.replace(".TW", "").str.replace(".TWO", "")
+    df["stock_id"] = df["symbol"].str.replace(".TWO", "").str.replace(".TW", "")
     df["date"] = pd.to_datetime(df["date"])
     df["month"] = df["date"].dt.to_period("M").dt.to_timestamp()
     monthly = df.groupby(["stock_id", "month"]).agg(
@@ -82,7 +82,7 @@ def load_annual():
         WHERE symbol IN ('{symbols}')
         ORDER BY symbol, year
     """, engine)
-    df["stock_id"] = df["symbol"].str.replace(".TW", "").str.replace(".TWO", "")
+    df["stock_id"] = df["symbol"].str.replace(".TWO", "").str.replace(".TW", "")
     df["company"] = df["stock_id"].map(WATCHLIST)
     df["annual_return"] = ((df["year_close"] - df["year_open"]) / df["year_open"] * 100).round(1)
     return df
