@@ -131,17 +131,12 @@ with tab3:
         merged = pd.merge(rev, price, on="date", how="inner")
         merged["price_chg"] = merged["m_close"].pct_change() * 100
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=merged["date"], y=merged["yoy_pct"],
-                                 name="Revenue YoY %", line=dict(color="#1D9E75")))
-        fig.add_trace(go.Scatter(x=merged["date"], y=merged["price_chg"],
-                                 name="Price MoM %", line=dict(color="#378ADD"), yaxis="y2"))
-        fig.update_layout(
-            yaxis2=dict(overlaying="y", side="right"),
-            title=f"{sid} {WATCHLIST[sid]}"
-        )
+        fig.add_trace(go.Scatter(x=merged["date"], y=merged["yoy_pct"], name="Revenue YoY %", line=dict(color="#1D9E75")))
+        fig.add_trace(go.Scatter(x=merged["date"], y=merged["price_chg"], name="Price MoM %", line=dict(color="#378ADD"), yaxis="y2"))
+        fig.update_layout(yaxis2=dict(overlaying="y", side="right"), title=f"{sid} {WATCHLIST[sid]}")
         st.plotly_chart(fig, use_container_width=True)
     else:
         ann = annual_df[annual_df["stock_id"].isin(selected)]
-        fig = px.bar(ann, x="year", y="annual_return", color="company", barmode="group",
-                     labels={"annual_return": "Annual Return %", "year": "Year"},
-                     t
+        fig = px.bar(ann, x="year", y="annual_return", color="company", barmode="group", labels={"annual_return": "Annual Return %", "year": "Year"}, title="Annual stock return (%)")
+        fig.add_hline(y=0, line_dash="dash", line_color="gray")
+        st.plotly_chart(fig, use_container_width=True)
