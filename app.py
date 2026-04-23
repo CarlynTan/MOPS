@@ -37,9 +37,16 @@ def load_revenue():
         ORDER BY stock_id, report_month
     """, engine)
     df["company"] = df["stock_id"].map(WATCHLIST)
-    df["date"] = pd.to_datetime(
-        df["report_month"].apply(lambda x: f"{int(x.split('_')[0])+1911}-{x.split('_')[1]}-01")
-    )
+    def roc_to_date(ym):
+        try:
+            parts = str(ym).split('_')
+            year = int(parts[0]) + 1911
+            month = int(parts[1])
+            return pd.Timestamp(year=year, month=month, day=1)
+        except:
+            return pd.NaT
+    df["date"] = df["report_month"].apply(roc_to_date)
+    df = df.dropna(subset=["date"])
     return df
 
 @st.cache_data
