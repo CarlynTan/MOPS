@@ -4,6 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
 
+st.cache_data.clear()
+
 st.set_page_config(page_title="Taiwan Stock Dashboard", layout="wide")
 
 PROJECT_REF = "fovemqafkhburqnpshrv"
@@ -136,12 +138,20 @@ with tab3:
         rev = rev_df[rev_df["stock_id"] == sid][["date", "yoy_pct"]].dropna()
         price = price_df[price_df["stock_id"] == sid][["month", "m_close"]].rename(columns={"month": "date"})
         merged = pd.merge(rev, price, on="date", how="inner")
-        merged["price_chg"] = merged["m_close"].pct_change() * 100
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=merged["date"], y=merged["yoy_pct"], name="Revenue YoY %", line=dict(color="#1D9E75")))
-        fig.add_trace(go.Scatter(x=merged["date"], y=merged["price_chg"], name="Price MoM %", line=dict(color="#378ADD"), yaxis="y2"))
-        fig.update_layout(yaxis2=dict(overlaying="y", side="right"), title=f"{sid} {WATCHLIST[sid]}")
-        st.plotly_chart(fig, use_container_width=True)
+
+        st.write(f"Debug — rev rows: {len(rev)}, price rows: {len(price)}, merged rows: {len(merged)}")
+
+        if len(merged) == 0:
+            st.warning("No overlapping dates between revenue and price data.")
+            st.write("Revenue dates sample:", rev["date"].head())
+            st.write("Price dates sample:", price["date"].head())
+        else:
+            merged["price_chg"] = merged["m_close"].pct_change() * 100
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=merged["date"], y=merged["yoy_pct"], name="Revenue YoY %", line=dict(color="#1D9E75")))
+            fig.add_trace(go.Scatter(x=merged["date"], y=merged["price_chg"], name="Price MoM %", line=dict(color="#378ADD"), yaxis="y2"))
+            fig.update_layout(yaxis2=dict(overlaying="y", side="right"), title=f"{sid} {WATCHLIST[sid]}")
+            st.plotly_chart(fig, use_container_width=True)
     else:
         ann = annual_df[annual_df["stock_id"].isin(selected)]
         fig = px.bar(ann, x="year", y="annual_return", color="company", barmode="group", labels={"annual_return": "Annual Return %", "year": "Year"}, title="Annual stock return (%)")
