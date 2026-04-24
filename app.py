@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from sqlalchemy import create_engine
 from datetime import date
 
-st.set_page_config(page_title="M* Taiwan Semi Monitor", layout="wide")
+st.set_page_config(page_title="Taiwan Semi Monitor", layout="wide")
 
 st.markdown("""
     <style>
