@@ -8,7 +8,7 @@ st.set_page_config(page_title="Taiwan Stock Dashboard", layout="wide")
 
 st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Aptos+Narrow&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600&display=swap');
         
         html, body, [class*="css"], [class*="st-"], .stDataFrame, .stSelectbox, 
         .stMultiSelect, .stCheckbox, .stTab, button, input, textarea {
