@@ -206,36 +206,91 @@ with tab1:
                   labels={"rev_current": "Revenue (TWD thousands)", "date": "Month"})
     st.plotly_chart(fig, use_container_width=True)
 
-    table_df = filtered.sort_values(["company", "date"], ascending=[True, False])
+    # ── Toggle filters ────────────────────────────────────────────
+    col1, col2 = st.columns(2)
+    with col1:
+        show_avg = st.checkbox("Show 3M / 6M Avg Revenue", value=False)
+    with col2:
+        show_avg_yoy = st.checkbox("Show 3M / 6M Avg YoY%", value=False)
 
-    display_df = table_df[["company_full", "date", "rev_display", "yoy_pct", "mom_pct"]].copy()
-    display_df["yoy_pct"] = display_df["yoy_pct"].apply(
-        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    # ── Rolling averages ──────────────────────────────────────────
+    table_df = filtered.sort_values(["company", "date"], ascending=[True, True]).copy()
+    table_df["3M Avg Rev"] = (
+        table_df.groupby("company")["rev_current"]
+        .transform(lambda x: x.rolling(3, min_periods=1).mean())
     )
-    display_df["mom_pct"] = display_df["mom_pct"].apply(
-        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    table_df["6M Avg Rev"] = (
+        table_df.groupby("company")["rev_current"]
+        .transform(lambda x: x.rolling(6, min_periods=1).mean())
     )
+    table_df["3M Avg YoY%"] = (
+        table_df.groupby("company")["3M Avg Rev"]
+        .transform(lambda x: x.pct_change(12) * 100)
+    )
+    table_df["6M Avg YoY%"] = (
+        table_df.groupby("company")["6M Avg Rev"]
+        .transform(lambda x: x.pct_change(12) * 100)
+    )
+
+    # Sort newest first for display
+    table_df = table_df.sort_values(["company", "date"], ascending=[True, False])
+
+    # Format
+    for col in ["3M Avg Rev", "6M Avg Rev"]:
+        table_df[col] = table_df[col].apply(
+            lambda x: f"{x:,.0f}" if pd.notna(x) else ""
+        )
+    for col in ["yoy_pct", "mom_pct", "3M Avg YoY%", "6M Avg YoY%"]:
+        table_df[col] = table_df[col].apply(
+            lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+        )
+
+    # ── Build column order dynamically based on checkboxes ────────
+    base_cols = ["company_full", "date", "rev_display", "yoy_pct", "mom_pct"]
+    avg_cols      = ["3M Avg Rev", "6M Avg Rev"]
+    avg_yoy_cols  = ["3M Avg YoY%", "6M Avg YoY%"]
+
+    all_cols = ["company_full", "date", "rev_display"]
+    if show_avg:
+        all_cols += avg_cols
+    if show_avg_yoy:
+        all_cols += avg_yoy_cols
+    all_cols += ["yoy_pct", "mom_pct"]
+
+    display_df = table_df[all_cols].copy()
     display_df = display_df.rename(columns={
         "company_full": "Company",
         "date":         "Sort Date",
-        "rev_display":  "Revenue (TWD thousands)",
+        "rev_display":  "Revenue (TWD k)",
         "yoy_pct":      "YoY %",
-        "mom_pct":      "MoM %"
+        "mom_pct":      "MoM %",
     })
+
+    column_config = {
+        "Sort Date":       st.column_config.DateColumn("Month", format="MMM-YYYY"),
+        "Company":         st.column_config.TextColumn("Company",        width="large"),
+        "Revenue (TWD k)": st.column_config.TextColumn("Revenue (TWD k)", width="medium"),
+        "3M Avg Rev":      st.column_config.TextColumn("3M Avg Rev",     width="medium"),
+        "6M Avg Rev":      st.column_config.TextColumn("6M Avg Rev",     width="medium"),
+        "YoY %":           st.column_config.TextColumn("YoY %",          width="small"),
+        "3M Avg YoY%":     st.column_config.TextColumn("3M Avg YoY%",    width="small"),
+        "6M Avg YoY%":     st.column_config.TextColumn("6M Avg YoY%",    width="small"),
+        "MoM %":           st.column_config.TextColumn("MoM %",          width="small"),
+    }
+
+    column_order = ["Company", "Sort Date", "Revenue (TWD k)"]
+    if show_avg:
+        column_order += ["3M Avg Rev", "6M Avg Rev"]
+    if show_avg_yoy:
+        column_order += ["3M Avg YoY%", "6M Avg YoY%"]
+    column_order += ["YoY %", "MoM %"]
 
     st.dataframe(
         display_df,
-        column_config={
-            "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
-            "Company":              st.column_config.TextColumn("Company",              width="large"),
-            "Revenue (TWD thousands)": st.column_config.TextColumn("Revenue (TWD thousands)", width="medium"),
-            "YoY %":               st.column_config.TextColumn("YoY %",               width="small"),
-            "MoM %":               st.column_config.TextColumn("MoM %",               width="small"),
-        },
-        column_order=["Company", "Sort Date", "Revenue (TWD thousands)", "YoY %", "MoM %"],
+        column_config=column_config,
+        column_order=column_order,
         use_container_width=True
     )
-
 
 with tab2:
     st.subheader("Year-on-year revenue growth (%)")
