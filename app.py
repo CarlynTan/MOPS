@@ -49,6 +49,7 @@ def load_revenue():
             return pd.NaT
     df["date"] = df["report_month"].apply(roc_to_date)
     df = df.dropna(subset=["date"])
+    df["date_display"] = df["date"].dt.strftime("%b-%Y")
     return df
 
 @st.cache_data
@@ -111,18 +112,26 @@ tab1, tab2, tab3 = st.tabs(["Monthly Revenue", "YoY Growth", "Revenue vs Price"]
 
 with tab1:
     st.subheader("Monthly revenue (TWD thousands)")
-    filtered = rev_df[rev_df["stock_id"].isin(selected)]
+    filtered = rev_df[rev_df["stock_id"].isin(selected)].copy()
+    filtered["rev_display"] = filtered["rev_current"].apply(
+        lambda x: f"{x:,.0f}" if pd.notna(x) else ""
+    )
     fig = px.line(filtered, x="date", y="rev_current", color="company",
-                  labels={"rev_current": "Revenue", "date": "Month"})
+                  labels={"rev_current": "Revenue (TWD thousands)", "date": "Month"})
     st.plotly_chart(fig, use_container_width=True)
     st.dataframe(
-        filtered[["company", "date", "rev_current", "yoy_pct", "mom_pct"]]
+        filtered[["company", "date_display", "rev_display", "yoy_pct", "mom_pct"]]
         .sort_values(["company", "date"], ascending=[True, False])
-        .rename(columns={"company": "Company", "date": "Month",
-                         "rev_current": "Revenue", "yoy_pct": "YoY %", "mom_pct": "MoM %"}),
+        .rename(columns={
+            "company": "Company",
+            "date_display": "Month",
+            "rev_display": "Revenue (TWD thousands)",
+            "yoy_pct": "YoY %",
+            "mom_pct": "MoM %"
+        }),
         use_container_width=True
     )
-
+    
 with tab2:
     st.subheader("Year-on-year revenue growth (%)")
     filtered = rev_df[rev_df["stock_id"].isin(selected)].dropna(subset=["yoy_pct"])
