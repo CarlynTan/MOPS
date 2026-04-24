@@ -66,6 +66,34 @@ WATCHLIST_DISPLAY = {
     "2449": "2449 King Yuan 京元電子",  
 }
 
+WATCHLIST_FULLNAME = {
+    "2330": "2330 | TSMC | 台積電",
+    "2317": "2317 | Hon Hai | 鴻海",
+    "6669": "6669 | Wiwynn | 緯穎",
+    "3231": "3231 | Wistron | 緯創",
+    "3105": "3105 | Win Semicon | 穩懋",
+    "6488": "6488 | GlobalWafers | 環球晶",
+    "5483": "5483 | SAS | 中美晶",
+    "3008": "3008 | Largan | 大立光",
+    "2454": "2454 | MediaTek | 聯發科",
+    "2303": "2303 | UMC | 聯電",
+    "4938": "4938 | Pegatron | 和碩",
+    "6770": "6770 | Powerchip | 力積電",
+    "5347": "5347 | Vanguard Semi | 世界先進",
+    "2382": "2382 | Quanta | 廣達",
+    "2408": "2408 | Nanya Tech | 南亞科",
+    "2379": "2379 | Realtek | 瑞昱",
+    "3034": "3034 | Novatek | 聯詠",
+    "3450": "3450 | Elite Laser | 晶睿",
+    "3406": "3406 | Genius Optical | 玉晶光",
+    "3037": "3037 | Unimicron | 欣興",
+    "3189": "3189 | Kinsus | 景碩",
+    "8046": "8046 | Nanya PCB | 南電",
+    "3711": "3711 | ASE Technology | 日月光",
+    "6239": "6239 | Powertech | 力成",
+    "2449": "2449 | King Yuan | 京元電子",
+}
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filter")
@@ -105,7 +133,8 @@ def load_revenue():
     df["stock_id"] = df["stock_id"].astype(str)
     df = df[df["stock_id"].isin(WATCHLIST.keys())]
     df["company"] = df["stock_id"].map(WATCHLIST)
-
+    df["company_full"] = df["stock_id"].map(WATCHLIST_FULLNAME)
+    
     def roc_to_date(ym):
         try:
             parts = str(ym).split('_')
@@ -178,16 +207,24 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
     table_df = filtered.sort_values(["company", "date"], ascending=[True, False])
-    
-    display_df = table_df[["company", "date", "date_display", "rev_display", "yoy_pct", "mom_pct"]].copy()
+
+    display_df = table_df[["company_full", "date", "rev_display", "yoy_pct", "mom_pct"]].copy()
     display_df = display_df.rename(columns={
-        "company":      "Company",
-        "date":         "Sort Date",   # real date, used for sorting
-        "date_display": "Month",
+        "company_full": "Company",
+        "date":         "Sort Date",
         "rev_display":  "Revenue (TWD thousands)",
         "yoy_pct":      "YoY %",
         "mom_pct":      "MoM %"
     })
+
+    st.dataframe(
+        display_df,
+        column_config={
+            "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
+        },
+        column_order=["Company", "Sort Date", "Revenue (TWD thousands)", "YoY %", "MoM %"],
+        use_container_width=True
+    )
 
 st.dataframe(
         display_df,
