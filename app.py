@@ -105,7 +105,7 @@ with st.sidebar:
 
     if subsector == "All":
         available = list(WATCHLIST.keys())
-        default_options = ["2330", "2454", "2317"]
+        default_options = list(WATCHLIST.keys())
     else:
         available = SUBSECTORS[subsector]
         default_options = SUBSECTORS[subsector]
