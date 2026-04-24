@@ -23,7 +23,7 @@ WATCHLIST = {
     "4938": "Pegatron", "6770": "Powerchip", "5347": "Vanguard Semi",
     "2382": "Quanta", "2408": "Nanya Tech", "2379": "Realtek",
     "3034": "Novatek", "3450": "Elite Laser", "3406": "Genius Optical",
-    "3037": "Unimicron", "3189": "Kinsus", "8046": "Nanya PCB"
+    "3037": "Unimicron", "3189": "Kinsus", "8046": "Nanya PCB",
     "3711": "ASE Technology", "6239": "Powertech", "2449": "King Yuan",
 }
 
