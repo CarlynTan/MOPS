@@ -207,11 +207,15 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
     # ── Toggle filters ────────────────────────────────────────────
-    col1, col2 = st.columns(2)
+     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        show_avg = st.checkbox("Show 3M / 6M Avg Revenue", value=False)
+        show_3m_avg = st.checkbox("3M Avg Revenue", value=False)
     with col2:
-        show_avg_yoy = st.checkbox("Show 3M / 6M Avg YoY%", value=False)
+        show_6m_avg = st.checkbox("6M Avg Revenue", value=False)
+    with col3:
+        show_3m_yoy = st.checkbox("3M Avg YoY%", value=False)
+    with col4:
+        show_6m_yoy = st.checkbox("6M Avg YoY%", value=False)
 
     # ── Rolling averages ──────────────────────────────────────────
     table_df = filtered.sort_values(["company", "date"], ascending=[True, True]).copy()
@@ -251,10 +255,14 @@ with tab1:
     avg_yoy_cols  = ["3M Avg YoY%", "6M Avg YoY%"]
 
     all_cols = ["company_full", "date", "rev_display"]
-    if show_avg:
-        all_cols += avg_cols
-    if show_avg_yoy:
-        all_cols += avg_yoy_cols
+    if show_3m_avg:
+        all_cols += ["3M Avg Rev"]
+    if show_6m_avg:
+        all_cols += ["6M Avg Rev"]
+    if show_3m_yoy:
+        all_cols += ["3M Avg YoY%"]
+    if show_6m_yoy:
+        all_cols += ["6M Avg YoY%"]
     all_cols += ["yoy_pct", "mom_pct"]
 
     display_df = table_df[all_cols].copy()
@@ -278,11 +286,15 @@ with tab1:
         "MoM %":           st.column_config.TextColumn("MoM %",          width="small"),
     }
 
-    column_order = ["Company", "Sort Date", "Revenue (TWD k)"]
-    if show_avg:
-        column_order += ["3M Avg Rev", "6M Avg Rev"]
-    if show_avg_yoy:
-        column_order += ["3M Avg YoY%", "6M Avg YoY%"]
+column_order = ["Company", "Sort Date", "Revenue (TWD k)"]
+    if show_3m_avg:
+        column_order += ["3M Avg Rev"]
+    if show_6m_avg:
+        column_order += ["6M Avg Rev"]
+    if show_3m_yoy:
+        column_order += ["3M Avg YoY%"]
+    if show_6m_yoy:
+        column_order += ["6M Avg YoY%"]
     column_order += ["YoY %", "MoM %"]
 
     st.dataframe(
