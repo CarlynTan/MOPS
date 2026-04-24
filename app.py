@@ -119,9 +119,9 @@ with tab1:
     fig = px.line(filtered, x="date", y="rev_current", color="company",
                   labels={"rev_current": "Revenue (TWD thousands)", "date": "Month"})
     st.plotly_chart(fig, use_container_width=True)
+    table_df = filtered.sort_values(["company", "date"], ascending=[True, False])
     st.dataframe(
-        filtered[["company", "date_display", "rev_display", "yoy_pct", "mom_pct"]]
-        .sort_values(["company", "date"], ascending=[True, False])
+        table_df[["company", "date_display", "rev_display", "yoy_pct", "mom_pct"]]
         .rename(columns={
             "company": "Company",
             "date_display": "Month",
