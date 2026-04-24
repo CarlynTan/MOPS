@@ -85,61 +85,6 @@ MONTH_NAMES = {
     7:"Jul", 8:"Aug", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dec"
 }
 
-# ── Load data first so sidebar can use real date ranges ──────────
-rev_df    = load_revenue()
-price_df  = load_prices()
-annual_df = load_annual()
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.header("Filter")
-
-    # Date filters
-    available_years  = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
-    available_months = sorted(rev_df["date"].dt.month.unique().tolist())
-
-    selected_years = st.multiselect(
-        "Filter by year",
-        options=available_years,
-        default=available_years,
-        format_func=lambda x: str(x)
-    )
-
-    selected_months = st.multiselect(
-        "Filter by month",
-        options=available_months,
-        default=available_months,
-        format_func=lambda x: MONTH_NAMES[x]
-    )
-
-    if not selected_years or not selected_months:
-        st.warning("Please select at least one year and one month.")
-        st.stop()
-
-    # Subsector + stock filters
-    subsector = st.selectbox(
-        "Filter by sub-sector",
-        options=["All"] + list(SUBSECTORS.keys())
-    )
-
-    if subsector == "All":
-        available = list(WATCHLIST.keys())
-        default_options = list(WATCHLIST.keys())
-    else:
-        available = SUBSECTORS[subsector]
-        default_options = SUBSECTORS[subsector]
-
-    selected = st.multiselect(
-        "Select stocks",
-        options=available,
-        default=default_options,
-        format_func=lambda x: WATCHLIST_DISPLAY[x]
-    )
-
-    if not selected:
-        st.warning("Please select at least one stock.")
-        st.stop()
-
 # ── Data loaders ──────────────────────────────────────────────────────────────
 @st.cache_data
 def load_revenue():
@@ -212,6 +157,62 @@ def apply_date_filter(df, date_col="date"):
         (df[date_col].dt.year.isin(selected_years)) &
         (df[date_col].dt.month.isin(selected_months))
     ]
+
+# ── Load data first so sidebar can use real date ranges ──────────
+rev_df    = load_revenue()
+price_df  = load_prices()
+annual_df = load_annual()
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("Filter")
+
+    # Date filters
+    available_years  = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
+    available_months = sorted(rev_df["date"].dt.month.unique().tolist())
+
+    selected_years = st.multiselect(
+        "Filter by year",
+        options=available_years,
+        default=available_years,
+        format_func=lambda x: str(x)
+    )
+
+    selected_months = st.multiselect(
+        "Filter by month",
+        options=available_months,
+        default=available_months,
+        format_func=lambda x: MONTH_NAMES[x]
+    )
+
+    if not selected_years or not selected_months:
+        st.warning("Please select at least one year and one month.")
+        st.stop()
+
+    # Subsector + stock filters
+    subsector = st.selectbox(
+        "Filter by sub-sector",
+        options=["All"] + list(SUBSECTORS.keys())
+    )
+
+    if subsector == "All":
+        available = list(WATCHLIST.keys())
+        default_options = list(WATCHLIST.keys())
+    else:
+        available = SUBSECTORS[subsector]
+        default_options = SUBSECTORS[subsector]
+
+    selected = st.multiselect(
+        "Select stocks",
+        options=available,
+        default=default_options,
+        format_func=lambda x: WATCHLIST_DISPLAY[x]
+    )
+
+    if not selected:
+        st.warning("Please select at least one stock.")
+        st.stop()
+
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 st.title("Taiwan Stock Dashboard")
