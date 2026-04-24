@@ -42,10 +42,10 @@ WATCHLIST = {
 
 SUBSECTORS = {
     "Silicon Materials": ["6488", "5483"],
+    "IC Designers": ["2454", "2379", "3034"],
     "Foundry": ["2330", "2303", "5347", "3105"],
     "Memory (IDM)": ["6770", "2408"],
-    "IC Designers": ["2454", "2379", "3034"],
-    "OSAT (Packaging)": ["3711", "6239", "2449"],
+    "OSAT (Packaging & Testing)": ["3711", "6239", "2449"],
     "PCB Firms": ["3037", "3189", "8046"],
     "ODM / EMS (Assembly)": ["2317", "6669", "3231", "2382", "4938"],
     "Optics / Optoelectronics": ["3008", "3406", "3450"],
