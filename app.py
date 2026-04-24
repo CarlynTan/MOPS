@@ -189,12 +189,12 @@ with tab1:
         "mom_pct":      "MoM %"
     })
 
-    st.dataframe(
+st.dataframe(
         display_df,
         column_config={
-            "Sort Date": st.column_config.DateColumn("Sort Date", format="MMM-YYYY"),
+            "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
         },
-        column_order=["Company", "Sort Date", "Month", "Revenue (TWD thousands)", "YoY %", "MoM %"],
+        column_order=["Company", "Sort Date", "Revenue (TWD thousands)", "YoY %", "MoM %"],
         use_container_width=True
     )
 
