@@ -201,7 +201,7 @@ def apply_date_filter(df, date_col="date"):
 with st.sidebar:
     st.header("Filter")
 
-    available_years  = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
+    available_years = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
     available_months = sorted(rev_df["date"].dt.month.unique().tolist())
 
     selected_years = st.multiselect(
