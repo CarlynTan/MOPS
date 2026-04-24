@@ -178,15 +178,23 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
     table_df = filtered.sort_values(["company", "date"], ascending=[True, False])
+    
+    display_df = table_df[["company", "date", "date_display", "rev_display", "yoy_pct", "mom_pct"]].copy()
+    display_df = display_df.rename(columns={
+        "company":      "Company",
+        "date":         "Sort Date",   # real date, used for sorting
+        "date_display": "Month",
+        "rev_display":  "Revenue (TWD thousands)",
+        "yoy_pct":      "YoY %",
+        "mom_pct":      "MoM %"
+    })
+
     st.dataframe(
-        table_df[["company", "date_display", "rev_display", "yoy_pct", "mom_pct"]]
-        .rename(columns={
-            "company":      "Company",
-            "date_display": "Month",
-            "rev_display":  "Revenue (TWD thousands)",
-            "yoy_pct":      "YoY %",
-            "mom_pct":      "MoM %"
-        }),
+        display_df,
+        column_config={
+            "Sort Date": st.column_config.DateColumn("Sort Date", format="MMM-YYYY"),
+        },
+        column_order=["Company", "Sort Date", "Month", "Revenue (TWD thousands)", "YoY %", "MoM %"],
         use_container_width=True
     )
 
