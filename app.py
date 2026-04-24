@@ -6,6 +6,17 @@ from sqlalchemy import create_engine
 
 st.set_page_config(page_title="Taiwan Stock Dashboard", layout="wide")
 
+st.markdown("""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Aptos+Narrow&display=swap');
+        
+        html, body, [class*="css"], [class*="st-"], .stDataFrame, .stSelectbox, 
+        .stMultiSelect, .stCheckbox, .stTab, button, input, textarea {
+            font-family: 'Aptos Narrow', sans-serif !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 PROJECT_REF = "fovemqafkhburqnpshrv"
 DB_PASSWORD = "97mISQEJOcIoKlSg"
 
@@ -207,7 +218,7 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
     # ── Toggle filters ────────────────────────────────────────────
-     col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         show_3m_avg = st.checkbox("3M Avg Revenue", value=False)
     with col2:
@@ -286,7 +297,7 @@ with tab1:
         "MoM %":           st.column_config.TextColumn("MoM %",          width="small"),
     }
 
-column_order = ["Company", "Sort Date", "Revenue (TWD k)"]
+    column_order = ["Company", "Sort Date", "Revenue (TWD k)"]
     if show_3m_avg:
         column_order += ["3M Avg Rev"]
     if show_6m_avg:
