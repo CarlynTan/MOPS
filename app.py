@@ -268,7 +268,7 @@ with tab1:
 
     column_config = {
         "Sort Date":       st.column_config.DateColumn("Month", format="MMM-YYYY"),
-        "Company":         st.column_config.TextColumn("Company",        width="large"),
+        "Company":         st.column_config.TextColumn("Company",        width="small"),
         "Revenue (TWD k)": st.column_config.TextColumn("Revenue (TWD k)", width="medium"),
         "3M Avg Rev":      st.column_config.TextColumn("3M Avg Rev",     width="medium"),
         "6M Avg Rev":      st.column_config.TextColumn("6M Avg Rev",     width="medium"),
