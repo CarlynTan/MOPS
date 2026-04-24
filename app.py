@@ -85,13 +85,18 @@ MONTH_NAMES = {
     7:"Jul", 8:"Aug", 9:"Sep", 10:"Oct", 11:"Nov", 12:"Dec"
 }
 
+# ── Load data first so sidebar can use real date ranges ──────────
+rev_df    = load_revenue()
+price_df  = load_prices()
+annual_df = load_annual()
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filter")
 
     # Date filters
-    available_years  = list(range(pd.Timestamp.today().year, 2019, -1))
-    available_months = list(range(1, 13))
+    available_years  = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
+    available_months = sorted(rev_df["date"].dt.month.unique().tolist())
 
     selected_years = st.multiselect(
         "Filter by year",
@@ -210,10 +215,6 @@ def apply_date_filter(df, date_col="date"):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 st.title("Taiwan Stock Dashboard")
-
-rev_df    = load_revenue()
-price_df  = load_prices()
-annual_df = load_annual()
 
 tab1, tab2, tab3 = st.tabs(["Monthly Revenue", "YoY Growth", "Revenue vs Price"])
 
