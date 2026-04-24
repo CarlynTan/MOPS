@@ -12,7 +12,7 @@ st.markdown("""
         
         html, body, [class*="css"], [class*="st-"], .stDataFrame, .stSelectbox, 
         .stMultiSelect, .stCheckbox, .stTab, button, input, textarea {
-            font-family: 'Aptos Narrow', sans-serif !important;
+            font-family: 'Barlow Condensed', sans-serif !important;
         }
     </style>
 """, unsafe_allow_html=True)
