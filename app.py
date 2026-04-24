@@ -18,6 +18,67 @@ def get_engine():
         f"@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres"
     )
 
+SUBSECTORS = {
+    "Silicon Materials": ["6488", "5483"],
+    "Foundry": ["2330", "2303", "5347", "3105"],
+    "Memory (IDM)": ["6770", "2408"],
+    "IC Designers": ["2454", "2379", "3034"],
+    "PCB Firms": ["3037", "3189", "8046"],
+    "ODM / EMS": ["2317", "6669", "3231", "2382", "4938"],
+    "Optics / Optoelectronics": ["3008", "3406", "3450"],
+}
+
+WATCHLIST_DISPLAY = {
+    "2330": "2330 TSMC 台積電",
+    "2317": "2317 Hon Hai 鴻海",
+    "6669": "6669 Wiwynn 緯穎",
+    "3231": "3231 Wistron 緯創",
+    "3105": "3105 Win Semicon 穩懋",
+    "6488": "6488 GlobalWafers 環球晶",
+    "5483": "5483 SAS 中美晶",
+    "3008": "3008 Largan 大立光",
+    "2454": "2454 MediaTek 聯發科",
+    "2303": "2303 UMC 聯電",
+    "4938": "4938 Pegatron 和碩",
+    "6770": "6770 Powerchip 力積電",
+    "5347": "5347 Vanguard Semi 世界先進",
+    "2382": "2382 Quanta 廣達",
+    "2408": "2408 Nanya Tech 南亞科",
+    "2379": "2379 Realtek 瑞昱",
+    "3034": "3034 Novatek 聯詠",
+    "3450": "3450 Elite Laser 晶睿",
+    "3406": "3406 Genius Optical 玉晶光",
+    "3037": "3037 Unimicron 欣興",
+    "3189": "3189 Kinsus 景碩",
+    "8046": "8046 Nanya PCB 南電",
+}
+
+with st.sidebar:
+    st.header("Filter")
+
+    subsector = st.selectbox(
+        "Filter by sub-sector",
+        options=["All"] + list(SUBSECTORS.keys())
+    )
+
+    if subsector == "All":
+        default_options = ["2330", "2454", "2317"]
+        available = list(WATCHLIST.keys())
+    else:
+        default_options = SUBSECTORS[subsector]
+        available = SUBSECTORS[subsector]
+
+    selected = st.multiselect(
+        "Select stocks",
+        options=available,
+        default=default_options,
+        format_func=lambda x: WATCHLIST_DISPLAY[x]
+    )
+
+    if not selected:
+        st.warning("Please select at least one stock.")
+        st.stop()
+        
 WATCHLIST = {
     "2330": "TSMC", "2317": "Hon Hai", "6669": "Wiwynn", "3231": "Wistron",
     "3105": "Win Semicon", "6488": "GlobalWafers", "5483": "SAS",
