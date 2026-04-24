@@ -226,14 +226,6 @@ with tab1:
         use_container_width=True
     )
 
-st.dataframe(
-        display_df,
-        column_config={
-            "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
-        },
-        column_order=["Company", "Sort Date", "Revenue (TWD thousands)", "YoY %", "MoM %"],
-        use_container_width=True
-    )
 
 with tab2:
     st.subheader("Year-on-year revenue growth (%)")
