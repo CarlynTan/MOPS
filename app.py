@@ -209,6 +209,12 @@ with tab1:
     table_df = filtered.sort_values(["company", "date"], ascending=[True, False])
 
     display_df = table_df[["company_full", "date", "rev_display", "yoy_pct", "mom_pct"]].copy()
+    display_df["yoy_pct"] = display_df["yoy_pct"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    )
+    display_df["mom_pct"] = display_df["mom_pct"].apply(
+        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+    )
     display_df = display_df.rename(columns={
         "company_full": "Company",
         "date":         "Sort Date",
@@ -221,6 +227,10 @@ with tab1:
         display_df,
         column_config={
             "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
+            "Company":              st.column_config.TextColumn("Company",              width="large"),
+            "Revenue (TWD thousands)": st.column_config.TextColumn("Revenue (TWD thousands)", width="medium"),
+            "YoY %":               st.column_config.TextColumn("YoY %",               width="small"),
+            "MoM %":               st.column_config.TextColumn("MoM %",               width="small"),
         },
         column_order=["Company", "Sort Date", "Revenue (TWD thousands)", "YoY %", "MoM %"],
         use_container_width=True
