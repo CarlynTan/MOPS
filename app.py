@@ -24,6 +24,7 @@ WATCHLIST = {
     "2382": "Quanta", "2408": "Nanya Tech", "2379": "Realtek",
     "3034": "Novatek", "3450": "Elite Laser", "3406": "Genius Optical",
     "3037": "Unimicron", "3189": "Kinsus", "8046": "Nanya PCB"
+    "3711": "ASE Technology", "6239": "Powertech", "2449": "King Yuan",
 }
 
 SUBSECTORS = {
@@ -31,6 +32,7 @@ SUBSECTORS = {
     "Foundry": ["2330", "2303", "5347", "3105"],
     "Memory (IDM)": ["6770", "2408"],
     "IC Designers": ["2454", "2379", "3034"],
+    "OSAT (Packaging)": ["3711", "6239", "2449"],
     "PCB Firms": ["3037", "3189", "8046"],
     "ODM / EMS (Assembly)": ["2317", "6669", "3231", "2382", "4938"],
     "Optics / Optoelectronics": ["3008", "3406", "3450"],
@@ -59,6 +61,9 @@ WATCHLIST_DISPLAY = {
     "3037": "3037 Unimicron 欣興",
     "3189": "3189 Kinsus 景碩",
     "8046": "8046 Nanya PCB 南電",
+    "3711": "3711 ASE Technology 日月光",
+    "6239": "6239 Powertech 力成",
+    "2449": "2449 King Yuan 京元電子   
 }
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
