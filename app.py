@@ -185,22 +185,10 @@ def load_annual():
         st.error(f"❌ Failed to load annual data: {e}")
         st.stop()
 
-@st.cache_data(ttl=3600)
-def load_fx():
-    try:
-        engine = get_engine()
-        df = pd.read_sql("SELECT month, twd_per_usd FROM fx_rates ORDER BY month", engine)
-        df["month"] = pd.to_datetime(df["month"])
-        return df
-    except Exception as e:
-        st.error(f"❌ Failed to load FX data: {e}")
-        return pd.DataFrame()
-        
 # ── Load data ─────────────────────────────────────────────────────────────────
 rev_df    = load_revenue()
 price_df  = load_prices()
 annual_df = load_annual()
-fx_df     = load_fx()
 
 # ── Helper: apply date filter ─────────────────────────────────────────────────
 def apply_date_filter(df, date_col="date"):
@@ -271,13 +259,12 @@ st.caption(
 )
 st.divider()
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Revenue Trend",
     "📈 Growth Momentum",
     "📉 3M Avg YoY Trend",
     "📉 6M Avg YoY Trend",
-    "🔗 Price vs Fundamentals",
-    "💵 Revenue in USD",
+     "🔗 Price vs Fundamentals",
 ])
 
 # ── Tab 1: Revenue Trend ──────────────────────────────────────────────────────
@@ -646,102 +633,3 @@ with tab5:
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.plotly_chart(fig4, use_container_width=True)
-
-# ── Tab 6: USD Revenue ────────────────────────────────────────────────────────
-with tab6:
-    st.subheader("Monthly Revenue (USD millions)")
-    st.caption("Revenue converted using end-of-month TWD/USD exchange rate · Source: Yahoo Finance")
-
-    if fx_df.empty:
-        st.warning("FX rate data not available. Please run the FX fetch cell in Colab first.")
-    else:
-        # Merge revenue with FX
-        usd_df = rev_df[rev_df["stock_id"].isin(selected)].copy()
-        usd_df["month_key"] = usd_df["date"].dt.to_period("M").dt.to_timestamp()
-        fx_df["month_key"]  = fx_df["month"].dt.to_period("M").dt.to_timestamp()
-
-        usd_df = pd.merge(usd_df, fx_df[["month_key", "twd_per_usd"]], 
-                          on="month_key", how="left")
-
-        # Convert: rev_current is in TWD thousands
-        # ÷ twd_per_usd ÷ 1000 = USD millions
-        usd_df["rev_usd_mn"] = (
-            usd_df["rev_current"] / usd_df["twd_per_usd"] / 1000
-        ).round(1)
-
-        usd_df = apply_date_filter(usd_df)
-
-        if usd_df.empty:
-            st.warning("No data for selected filters.")
-        else:
-            # Chart
-            fig6 = px.line(
-                usd_df.dropna(subset=["rev_usd_mn"]),
-                x="date", y="rev_usd_mn", color="company",
-                labels={"rev_usd_mn": "Revenue (USD mn)", "date": "Month"},
-                color_discrete_sequence=BRAND_COLORS
-            )
-            fig6.update_layout(
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                hovermode="x unified",
-                plot_bgcolor="white",
-                yaxis=dict(gridcolor="#eeeeee"),
-                xaxis=dict(gridcolor="#eeeeee"),
-            )
-            fig6.update_traces(line=dict(width=2))
-            st.plotly_chart(fig6, use_container_width=True)
-
-            # FX rate reference
-            with st.expander("📋 TWD/USD exchange rates used"):
-                fx_display = fx_df[
-                    (fx_df["month_key"] >= usd_df["date"].min()) &
-                    (fx_df["month_key"] <= usd_df["date"].max())
-                ][["month_key", "twd_per_usd"]].copy()
-                fx_display["month_key"] = fx_display["month_key"].dt.strftime("%b-%Y")
-                fx_display = fx_display.rename(columns={
-                    "month_key": "Month",
-                    "twd_per_usd": "TWD per USD"
-                })
-                fx_display["TWD per USD"] = fx_display["TWD per USD"].round(2)
-                st.dataframe(fx_display, use_container_width=True)
-
-            # Table
-            st.markdown("**USD Revenue Data**")
-            table6 = usd_df[["company_full", "date", "rev_usd_mn", 
-                              "twd_per_usd", "yoy_pct", "mom_pct"]].copy()
-            table6 = table6.sort_values(["company_full", "date"], 
-                                         ascending=[True, False])
-            table6["rev_usd_mn"] = table6["rev_usd_mn"].apply(
-                lambda x: f"{x:,.1f}" if pd.notna(x) else ""
-            )
-            table6["twd_per_usd"] = table6["twd_per_usd"].apply(
-                lambda x: f"{x:.2f}" if pd.notna(x) else ""
-            )
-            table6["yoy_pct"] = table6["yoy_pct"].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-            table6["mom_pct"] = table6["mom_pct"].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-            table6 = table6.rename(columns={
-                "company_full":  "Company",
-                "date":          "Sort Date",
-                "rev_usd_mn":    "Revenue (USD mn)",
-                "twd_per_usd":   "TWD/USD Rate",
-                "yoy_pct":       "YoY %",
-                "mom_pct":       "MoM %",
-            })
-            st.dataframe(
-                table6,
-                column_config={
-                    "Sort Date":        st.column_config.DateColumn("Month", format="MMM-YYYY"),
-                    "Company":          st.column_config.TextColumn("Company",          width="small"),
-                    "Revenue (USD mn)": st.column_config.TextColumn("Revenue (USD mn)", width="medium"),
-                    "TWD/USD Rate":     st.column_config.TextColumn("TWD/USD Rate",     width="small"),
-                    "YoY %":            st.column_config.TextColumn("YoY %",            width="small"),
-                    "MoM %":            st.column_config.TextColumn("MoM %",            width="small"),
-                },
-                column_order=["Company", "Sort Date", "Revenue (USD mn)", 
-                               "TWD/USD Rate", "YoY %", "MoM %"],
-                use_container_width=True
-            )
