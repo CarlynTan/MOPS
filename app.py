@@ -26,8 +26,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Secrets / config ──────────────────────────────────────────────────────────
-PROJECT_REF = st.secrets.get("PROJECT_REF", "fovemqafkhburqnpshrv")
-DB_PASSWORD = st.secrets.get("DB_PASSWORD", "97mISQEJOcIoKlSg")
+PROJECT_REF = st.secrets["PROJECT_REF"]
+DB_PASSWORD = st.secrets["DB_PASSWORD"]
 
 WATCHLIST = {
     "2330": "TSMC", "2317": "Hon Hai", "6669": "Wiwynn", "3231": "Wistron",
