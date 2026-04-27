@@ -274,9 +274,9 @@ st.divider()
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Revenue Trend",
     "📈 Growth Momentum",
-    "🔗 Price vs Fundamentals",
     "📉 3M Avg YoY Trend",
     "📉 6M Avg YoY Trend",
+    "🔗 Price vs Fundamentals",
     "💵 Revenue in USD",
 ])
 
