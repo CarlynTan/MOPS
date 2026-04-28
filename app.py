@@ -185,10 +185,22 @@ def load_annual():
         st.error(f"❌ Failed to load annual data: {e}")
         st.stop()
 
+@st.cache_data(ttl=3600)
+def load_fx():
+    try:
+        engine = get_engine()
+        df = pd.read_sql("SELECT month, twd_per_usd FROM fx_rates ORDER BY month", engine)
+        df["month"] = pd.to_datetime(df["month"])
+        return df
+    except Exception as e:
+        st.warning(f"FX data not available: {e}")
+        return pd.DataFrame()
+        
 # ── Load data ─────────────────────────────────────────────────────────────────
 rev_df    = load_revenue()
 price_df  = load_prices()
 annual_df = load_annual()
+fx_df     = load_fx()
 
 # ── Helper: apply date filter ─────────────────────────────────────────────────
 def apply_date_filter(df, date_col="date"):
