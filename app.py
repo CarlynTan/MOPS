@@ -40,7 +40,7 @@ DB_PASSWORD  = st.secrets["DB_PASSWORD"]
 GEMINI_KEY   = st.secrets["GEMINI_API_KEY"]
 
 genai.configure(api_key=GEMINI_KEY)
-gemini = genai.GenerativeModel("gemini-1.5-flash")
+gemini = genai.GenerativeModel("gemini-2.0-flash")
 
 WATCHLIST = {
     "2330":"TSMC","2317":"Hon Hai","6669":"Wiwynn","3231":"Wistron",
