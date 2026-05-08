@@ -236,7 +236,7 @@ with st.sidebar:
     st.caption("Source: MOPS / Yahoo Finance")
     st.caption(f"Last refreshed: {date.today().strftime('%d %b %Y')}")
 
-st.title("M* Taiwan Semi Monitor")
+st.title("Taiwan Semi Monitor")
 st.caption(f"Covering {len(WATCHLIST)} companies · Data as of {latest_month.strftime('%b %Y')} · Source: MOPS / Yahoo Finance")
 st.divider()
 
