@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from sqlalchemy import create_engine
@@ -25,7 +26,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ── Secrets / config ──────────────────────────────────────────────────────────
 PROJECT_REF = st.secrets["PROJECT_REF"]
 DB_PASSWORD = st.secrets["DB_PASSWORD"]
 
@@ -94,7 +94,6 @@ BRAND_COLORS = [
     "#1ABC9C", "#D35400", "#8E44AD", "#27AE60",
 ]
 
-# ── DB engine ─────────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_engine():
     try:
@@ -107,7 +106,6 @@ def get_engine():
         st.error(f"❌ Failed to connect to database: {e}")
         st.stop()
 
-# ── Data loaders ──────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600)
 def load_revenue():
     try:
@@ -195,25 +193,22 @@ def load_fx():
     except Exception as e:
         st.warning(f"FX data not available: {e}")
         return pd.DataFrame()
-        
-# ── Load data ─────────────────────────────────────────────────────────────────
+
 rev_df    = load_revenue()
 price_df  = load_prices()
 annual_df = load_annual()
 fx_df     = load_fx()
 
-# ── Helper: apply date filter ─────────────────────────────────────────────────
 def apply_date_filter(df, date_col="date"):
     return df[
         (df[date_col].dt.year.isin(selected_years)) &
         (df[date_col].dt.month.isin(selected_months))
     ]
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Filter")
 
-    available_years = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
+    available_years  = sorted(rev_df["date"].dt.year.unique().tolist(), reverse=True)
     available_months = sorted(rev_df["date"].dt.month.unique().tolist())
 
     selected_years = st.multiselect(
@@ -240,10 +235,10 @@ with st.sidebar:
     )
 
     if subsector == "All":
-        available = list(WATCHLIST.keys())
+        available     = list(WATCHLIST.keys())
         default_options = list(WATCHLIST.keys())
     else:
-        available = SUBSECTORS[subsector]
+        available     = SUBSECTORS[subsector]
         default_options = SUBSECTORS[subsector]
 
     selected = st.multiselect(
@@ -263,7 +258,6 @@ with st.sidebar:
     st.caption("Source: MOPS / Yahoo Finance")
     st.caption(f"Last refreshed: {date.today().strftime('%d %b %Y')}")
 
-# ── Title ─────────────────────────────────────────────────────────────────────
 st.title("M* Taiwan Semi Monitor")
 st.caption(
     f"Covering {len(WATCHLIST)} companies across {len(SUBSECTORS)} sub-sectors · "
@@ -271,15 +265,89 @@ st.caption(
 )
 st.divider()
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📊 Revenue Trend",
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📊 Revenue (TWD)",
+    "💵 Revenue (USD)",
     "📈 Growth Momentum",
     "📉 3M Avg YoY Trend",
     "📉 6M Avg YoY Trend",
-     "🔗 Price vs Fundamentals",
+    "🔗 Price vs Fundamentals",
 ])
 
-# ── Tab 1: Revenue Trend ──────────────────────────────────────────────────────
+# ── Helper: build revenue table ───────────────────────────────────────────────
+def build_revenue_table(filtered_df, show_3m_avg, show_6m_avg, show_3m_yoy, show_6m_yoy,
+                         rev_col="rev_current", unit_label="TWD k"):
+    table_df = rev_df[rev_df["stock_id"].isin(selected)].copy()
+    if rev_col != "rev_current":
+        table_df = table_df.merge(
+            fx_df.rename(columns={"month": "date"}), on="date", how="left"
+        )
+        table_df[rev_col] = table_df["rev_current"] / table_df["twd_per_usd"] / 1000
+    table_df = table_df.sort_values(["company", "date"], ascending=[True, True])
+    table_df["3M Avg Rev"] = (
+        table_df.groupby("company")[rev_col]
+        .transform(lambda x: x.rolling(3, min_periods=1).mean())
+    )
+    table_df["6M Avg Rev"] = (
+        table_df.groupby("company")[rev_col]
+        .transform(lambda x: x.rolling(6, min_periods=1).mean())
+    )
+    table_df["3M Avg YoY%"] = (
+        table_df.groupby("company")["3M Avg Rev"]
+        .transform(lambda x: x.pct_change(12) * 100)
+    )
+    table_df["6M Avg YoY%"] = (
+        table_df.groupby("company")["6M Avg Rev"]
+        .transform(lambda x: x.pct_change(12) * 100)
+    )
+    table_df = apply_date_filter(table_df)
+    table_df = table_df.sort_values(["company", "date"], ascending=[True, False])
+    table_df["rev_display"] = table_df[rev_col].apply(
+        lambda x: f"{x:,.0f}" if pd.notna(x) else ""
+    )
+    for col in ["3M Avg Rev", "6M Avg Rev"]:
+        table_df[col] = table_df[col].apply(
+            lambda x: f"{x:,.0f}" if pd.notna(x) else ""
+        )
+    for col in ["yoy_pct", "mom_pct", "3M Avg YoY%", "6M Avg YoY%"]:
+        if col in table_df.columns:
+            table_df[col] = table_df[col].apply(
+                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+            )
+    all_cols = ["company_full", "date", "rev_display"]
+    if show_3m_avg: all_cols += ["3M Avg Rev"]
+    if show_6m_avg: all_cols += ["6M Avg Rev"]
+    if show_3m_yoy: all_cols += ["3M Avg YoY%"]
+    if show_6m_yoy: all_cols += ["6M Avg YoY%"]
+    all_cols += ["yoy_pct", "mom_pct"]
+    display_df = table_df[all_cols].copy()
+    display_df = display_df.rename(columns={
+        "company_full": "Company",
+        "date":         "Sort Date",
+        "rev_display":  f"Revenue ({unit_label})",
+        "yoy_pct":      "YoY %",
+        "mom_pct":      "MoM %",
+    })
+    column_config = {
+        "Sort Date":              st.column_config.DateColumn("Month", format="MMM-YYYY"),
+        "Company":                st.column_config.TextColumn("Company",           width="small"),
+        f"Revenue ({unit_label})": st.column_config.TextColumn(f"Revenue ({unit_label})", width="medium"),
+        "3M Avg Rev":             st.column_config.TextColumn("3M Avg Rev",        width="medium"),
+        "6M Avg Rev":             st.column_config.TextColumn("6M Avg Rev",        width="medium"),
+        "YoY %":                  st.column_config.TextColumn("YoY %",             width="small"),
+        "3M Avg YoY%":            st.column_config.TextColumn("3M Avg YoY%",       width="small"),
+        "6M Avg YoY%":            st.column_config.TextColumn("6M Avg YoY%",       width="small"),
+        "MoM %":                  st.column_config.TextColumn("MoM %",             width="small"),
+    }
+    column_order = ["Company", "Sort Date", f"Revenue ({unit_label})"]
+    if show_3m_avg: column_order += ["3M Avg Rev"]
+    if show_6m_avg: column_order += ["6M Avg Rev"]
+    if show_3m_yoy: column_order += ["3M Avg YoY%"]
+    if show_6m_yoy: column_order += ["6M Avg YoY%"]
+    column_order += ["YoY %", "MoM %"]
+    return display_df, column_config, column_order
+
+# ── Tab 1: Revenue (TWD) ──────────────────────────────────────────────────────
 with tab1:
     st.subheader("Monthly Revenue (TWD thousands)")
 
@@ -289,10 +357,6 @@ with tab1:
     if filtered.empty:
         st.warning("No data available for the selected filters.")
     else:
-        filtered["rev_display"] = filtered["rev_current"].apply(
-            lambda x: f"{x:,.0f}" if pd.notna(x) else ""
-        )
-
         fig = px.line(
             filtered, x="date", y="rev_current", color="company",
             labels={"rev_current": "Revenue (TWD thousands)", "date": "Month"},
@@ -300,8 +364,7 @@ with tab1:
         )
         fig.update_layout(
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            hovermode="x unified",
-            plot_bgcolor="white",
+            hovermode="x unified", plot_bgcolor="white",
             yaxis=dict(gridcolor="#eeeeee"),
             xaxis=dict(gridcolor="#eeeeee"),
         )
@@ -310,102 +373,136 @@ with tab1:
 
         st.markdown("**Optional columns**")
         col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            show_3m_avg = st.checkbox("3M Avg Revenue", value=False)
-        with col2:
-            show_6m_avg = st.checkbox("6M Avg Revenue", value=False)
-        with col3:
-            show_3m_yoy = st.checkbox("3M Avg YoY%", value=False)
-        with col4:
-            show_6m_yoy = st.checkbox("6M Avg YoY%", value=False)
+        with col1: show_3m_avg = st.checkbox("3M Avg Revenue", value=False, key="t1_3m_avg")
+        with col2: show_6m_avg = st.checkbox("6M Avg Revenue", value=False, key="t1_6m_avg")
+        with col3: show_3m_yoy = st.checkbox("3M Avg YoY%",   value=False, key="t1_3m_yoy")
+        with col4: show_6m_yoy = st.checkbox("6M Avg YoY%",   value=False, key="t1_6m_yoy")
 
-        # Rolling calcs on full data before date filter
-        table_df = rev_df[rev_df["stock_id"].isin(selected)].copy()
-        table_df = table_df.sort_values(["company", "date"], ascending=[True, True])
-        table_df["3M Avg Rev"] = (
-            table_df.groupby("company")["rev_current"]
-            .transform(lambda x: x.rolling(3, min_periods=1).mean())
+        display_df, column_config, column_order = build_revenue_table(
+            filtered, show_3m_avg, show_6m_avg, show_3m_yoy, show_6m_yoy,
+            rev_col="rev_current", unit_label="TWD k"
         )
-        table_df["6M Avg Rev"] = (
-            table_df.groupby("company")["rev_current"]
-            .transform(lambda x: x.rolling(6, min_periods=1).mean())
-        )
-        table_df["3M Avg YoY%"] = (
-            table_df.groupby("company")["3M Avg Rev"]
-            .transform(lambda x: x.pct_change(12) * 100)
-        )
-        table_df["6M Avg YoY%"] = (
-            table_df.groupby("company")["6M Avg Rev"]
-            .transform(lambda x: x.pct_change(12) * 100)
-        )
+        st.dataframe(display_df, column_config=column_config,
+                     column_order=column_order, use_container_width=True)
 
-        table_df = apply_date_filter(table_df)
-        table_df = table_df.sort_values(["company", "date"], ascending=[True, False])
-        table_df["rev_display"] = table_df["rev_current"].apply(
-            lambda x: f"{x:,.0f}" if pd.notna(x) else ""
-        )
-
-        for col in ["3M Avg Rev", "6M Avg Rev"]:
-            table_df[col] = table_df[col].apply(
-                lambda x: f"{x:,.0f}" if pd.notna(x) else ""
-            )
-        for col in ["yoy_pct", "mom_pct", "3M Avg YoY%", "6M Avg YoY%"]:
-            table_df[col] = table_df[col].apply(
-                lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-            )
-
-        all_cols = ["company_full", "date", "rev_display"]
-        if show_3m_avg:
-            all_cols += ["3M Avg Rev"]
-        if show_6m_avg:
-            all_cols += ["6M Avg Rev"]
-        if show_3m_yoy:
-            all_cols += ["3M Avg YoY%"]
-        if show_6m_yoy:
-            all_cols += ["6M Avg YoY%"]
-        all_cols += ["yoy_pct", "mom_pct"]
-
-        display_df = table_df[all_cols].copy()
-        display_df = display_df.rename(columns={
-            "company_full": "Company",
-            "date":         "Sort Date",
-            "rev_display":  "Revenue (TWD k)",
-            "yoy_pct":      "YoY %",
-            "mom_pct":      "MoM %",
-        })
-
-        column_config = {
-            "Sort Date":       st.column_config.DateColumn("Month", format="MMM-YYYY"),
-            "Company":         st.column_config.TextColumn("Company",         width="small"),
-            "Revenue (TWD k)": st.column_config.TextColumn("Revenue (TWD k)", width="medium"),
-            "3M Avg Rev":      st.column_config.TextColumn("3M Avg Rev",      width="medium"),
-            "6M Avg Rev":      st.column_config.TextColumn("6M Avg Rev",      width="medium"),
-            "YoY %":           st.column_config.TextColumn("YoY %",           width="small"),
-            "3M Avg YoY%":     st.column_config.TextColumn("3M Avg YoY%",     width="small"),
-            "6M Avg YoY%":     st.column_config.TextColumn("6M Avg YoY%",     width="small"),
-            "MoM %":           st.column_config.TextColumn("MoM %",           width="small"),
-        }
-
-        column_order = ["Company", "Sort Date", "Revenue (TWD k)"]
-        if show_3m_avg:
-            column_order += ["3M Avg Rev"]
-        if show_6m_avg:
-            column_order += ["6M Avg Rev"]
-        if show_3m_yoy:
-            column_order += ["3M Avg YoY%"]
-        if show_6m_yoy:
-            column_order += ["6M Avg YoY%"]
-        column_order += ["YoY %", "MoM %"]
-
-        st.dataframe(
-            display_df,
-            column_config=column_config,
-            column_order=column_order,
-            use_container_width=True
-        )
-
-# ── Tab 2: Growth Momentum ────────────────────────────────────────────────────
+# ── Tab 2: Revenue (USD) ──────────────────────────────────────────────────────
 with tab2:
+    st.subheader("Monthly Revenue (USD millions)")
+
+    if fx_df.empty:
+        st.error("FX rate data not available. Please upload fx_rates table to Supabase.")
+    else:
+        latest_fx = fx_df.sort_values("month").iloc[-1]
+        latest_fx_date = latest_fx["month"].strftime("%b %Y")
+        latest_fx_rate = latest_fx["twd_per_usd"]
+
+        st.info(
+            f"💱 Latest FX rate: **1 USD = {latest_fx_rate:.4f} TWD** (as of {latest_fx_date})  \n"
+            f"**Methodology:** Each month's TWD revenue is divided by that month's average TWD/USD "
+            f"exchange rate sourced from Yahoo Finance (ticker: TWD=X). Monthly average of daily "
+            f"closing rates is used to smooth intra-month volatility."
+        )
+
+        rev_usd = rev_df[rev_df["stock_id"].isin(selected)].copy()
+        rev_usd = rev_usd.merge(
+            fx_df.rename(columns={"month": "date"}), on="date", how="left"
+        )
+        rev_usd["rev_usd"] = rev_usd["rev_current"] / rev_usd["twd_per_usd"] / 1000
+        rev_usd = apply_date_filter(rev_usd)
+
+        if rev_usd.empty:
+            st.warning("No data available for the selected filters.")
+        else:
+            fig_usd = px.line(
+                rev_usd, x="date", y="rev_usd", color="company",
+                labels={"rev_usd": "Revenue (USD millions)", "date": "Month"},
+                color_discrete_sequence=BRAND_COLORS
+            )
+            fig_usd.update_layout(
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                hovermode="x unified", plot_bgcolor="white",
+                yaxis=dict(gridcolor="#eeeeee"),
+                xaxis=dict(gridcolor="#eeeeee"),
+            )
+            fig_usd.update_traces(line=dict(width=2))
+            st.plotly_chart(fig_usd, use_container_width=True)
+
+            st.markdown("**Optional columns**")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1: show_3m_avg = st.checkbox("3M Avg Revenue", value=False, key="t2_3m_avg")
+            with col2: show_6m_avg = st.checkbox("6M Avg Revenue", value=False, key="t2_6m_avg")
+            with col3: show_3m_yoy = st.checkbox("3M Avg YoY%",   value=False, key="t2_3m_yoy")
+            with col4: show_6m_yoy = st.checkbox("6M Avg YoY%",   value=False, key="t2_6m_yoy")
+
+            rev_usd_table = rev_df[rev_df["stock_id"].isin(selected)].copy()
+            rev_usd_table = rev_usd_table.merge(
+                fx_df.rename(columns={"month": "date"}), on="date", how="left"
+            )
+            rev_usd_table["rev_usd"] = rev_usd_table["rev_current"] / rev_usd_table["twd_per_usd"] / 1000
+            rev_usd_table = rev_usd_table.sort_values(["company", "date"], ascending=[True, True])
+            rev_usd_table["3M Avg Rev"] = (
+                rev_usd_table.groupby("company")["rev_usd"]
+                .transform(lambda x: x.rolling(3, min_periods=1).mean())
+            )
+            rev_usd_table["6M Avg Rev"] = (
+                rev_usd_table.groupby("company")["rev_usd"]
+                .transform(lambda x: x.rolling(6, min_periods=1).mean())
+            )
+            rev_usd_table["3M Avg YoY%"] = (
+                rev_usd_table.groupby("company")["3M Avg Rev"]
+                .transform(lambda x: x.pct_change(12) * 100)
+            )
+            rev_usd_table["6M Avg YoY%"] = (
+                rev_usd_table.groupby("company")["6M Avg Rev"]
+                .transform(lambda x: x.pct_change(12) * 100)
+            )
+            rev_usd_table = apply_date_filter(rev_usd_table)
+            rev_usd_table = rev_usd_table.sort_values(["company", "date"], ascending=[True, False])
+            rev_usd_table["rev_display"] = rev_usd_table["rev_usd"].apply(
+                lambda x: f"{x:,.2f}" if pd.notna(x) else ""
+            )
+            for col in ["3M Avg Rev", "6M Avg Rev"]:
+                rev_usd_table[col] = rev_usd_table[col].apply(
+                    lambda x: f"{x:,.2f}" if pd.notna(x) else ""
+                )
+            for col in ["yoy_pct", "mom_pct", "3M Avg YoY%", "6M Avg YoY%"]:
+                if col in rev_usd_table.columns:
+                    rev_usd_table[col] = rev_usd_table[col].apply(
+                        lambda x: f"{x:.1f}%" if pd.notna(x) else ""
+                    )
+            all_cols = ["company_full", "date", "rev_display"]
+            if show_3m_avg: all_cols += ["3M Avg Rev"]
+            if show_6m_avg: all_cols += ["6M Avg Rev"]
+            if show_3m_yoy: all_cols += ["3M Avg YoY%"]
+            if show_6m_yoy: all_cols += ["6M Avg YoY%"]
+            all_cols += ["yoy_pct", "mom_pct"]
+            display_usd = rev_usd_table[all_cols].copy()
+            display_usd = display_usd.rename(columns={
+                "company_full": "Company", "date": "Sort Date",
+                "rev_display": "Revenue (USD mn)", "yoy_pct": "YoY %", "mom_pct": "MoM %",
+            })
+            col_cfg_usd = {
+                "Sort Date":        st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "Company":          st.column_config.TextColumn("Company",          width="small"),
+                "Revenue (USD mn)": st.column_config.TextColumn("Revenue (USD mn)", width="medium"),
+                "3M Avg Rev":       st.column_config.TextColumn("3M Avg Rev",       width="medium"),
+                "6M Avg Rev":       st.column_config.TextColumn("6M Avg Rev",       width="medium"),
+                "YoY %":            st.column_config.TextColumn("YoY %",            width="small"),
+                "3M Avg YoY%":      st.column_config.TextColumn("3M Avg YoY%",      width="small"),
+                "6M Avg YoY%":      st.column_config.TextColumn("6M Avg YoY%",      width="small"),
+                "MoM %":            st.column_config.TextColumn("MoM %",            width="small"),
+            }
+            col_order_usd = ["Company", "Sort Date", "Revenue (USD mn)"]
+            if show_3m_avg: col_order_usd += ["3M Avg Rev"]
+            if show_6m_avg: col_order_usd += ["6M Avg Rev"]
+            if show_3m_yoy: col_order_usd += ["3M Avg YoY%"]
+            if show_6m_yoy: col_order_usd += ["6M Avg YoY%"]
+            col_order_usd += ["YoY %", "MoM %"]
+            st.dataframe(display_usd, column_config=col_cfg_usd,
+                         column_order=col_order_usd, use_container_width=True)
+
+# ── Tab 3: Growth Momentum ────────────────────────────────────────────────────
+with tab3:
     st.subheader("Year-on-Year Revenue Growth (%)")
 
     filtered2 = rev_df[rev_df["stock_id"].isin(selected)].dropna(subset=["yoy_pct"]).copy()
@@ -422,15 +519,13 @@ with tab2:
         fig2.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
         fig2.update_layout(
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            hovermode="x unified",
-            plot_bgcolor="white",
+            hovermode="x unified", plot_bgcolor="white",
             yaxis=dict(gridcolor="#eeeeee", zeroline=True, zerolinecolor="#cccccc"),
             xaxis=dict(gridcolor="#eeeeee"),
         )
         fig2.update_traces(line=dict(width=2))
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Table below chart
         st.markdown("**YoY Growth Data**")
         yoy_table = filtered2[["company_full", "date", "yoy_pct", "mom_pct"]].copy()
         yoy_table = yoy_table.sort_values(["company_full", "date"], ascending=[True, False])
@@ -441,10 +536,8 @@ with tab2:
             lambda x: f"{x:.1f}%" if pd.notna(x) else ""
         )
         yoy_table = yoy_table.rename(columns={
-            "company_full": "Company",
-            "date":         "Sort Date",
-            "yoy_pct":      "YoY %",
-            "mom_pct":      "MoM %",
+            "company_full": "Company", "date": "Sort Date",
+            "yoy_pct": "YoY %", "mom_pct": "MoM %",
         })
         st.dataframe(
             yoy_table,
@@ -458,11 +551,12 @@ with tab2:
             use_container_width=True
         )
 
-
-# ── Tab 3: 3M Avg YoY Trend ───────────────────────────────────────────────────
-with tab3:
+# ── Tab 4: 3M Avg YoY Trend ───────────────────────────────────────────────────
+with tab4:
     st.subheader("3-Month Average YoY Growth (%)")
-    st.caption("Smoothed YoY: 3M rolling average revenue vs same period prior year. Reduces single-month noise.")
+    st.caption("Smoothed YoY: 3M rolling average revenue vs same period prior year.")
+
+    chart_type_3m = st.radio("Chart type", ["Line", "Bar"], horizontal=True, key="chart_3m")
 
     roll_df = rev_df[rev_df["stock_id"].isin(selected)].copy()
     roll_df = roll_df.sort_values(["company", "date"], ascending=[True, True])
@@ -480,44 +574,61 @@ with tab3:
     if roll_df.empty:
         st.warning("No data available for the selected filters.")
     else:
-        fig4 = px.line(
-            roll_df, x="date", y="3M Avg YoY%", color="company",
-            labels={"3M Avg YoY%": "3M Avg YoY %", "date": "Month"},
-            color_discrete_sequence=BRAND_COLORS
-        )
+        if chart_type_3m == "Line":
+            fig4 = px.line(
+                roll_df, x="date", y="3M Avg YoY%", color="company",
+                labels={"3M Avg YoY%": "3M Avg YoY %", "date": "Month"},
+                color_discrete_sequence=BRAND_COLORS
+            )
+        else:
+            fig4 = px.bar(
+                roll_df, x="date", y="3M Avg YoY%", color="company",
+                barmode="group",
+                labels={"3M Avg YoY%": "3M Avg YoY %", "date": "Month"},
+                color_discrete_sequence=BRAND_COLORS
+            )
         fig4.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
         fig4.update_layout(
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            hovermode="x unified",
-            plot_bgcolor="white",
+            hovermode="x unified", plot_bgcolor="white",
             yaxis=dict(gridcolor="#eeeeee", zeroline=True, zerolinecolor="#cccccc"),
             xaxis=dict(gridcolor="#eeeeee"),
         )
-        fig4.update_traces(line=dict(width=2))
+        if chart_type_3m == "Line":
+            fig4.update_traces(line=dict(width=2))
         st.plotly_chart(fig4, use_container_width=True)
 
-        # Table
-        t4 = roll_df[["company_full", "date", "3M Avg YoY%"]].copy()
+        t4 = roll_df[["company_full", "date", "rev_current", "3M Avg Rev", "3M Avg YoY%", "mom_pct"]].copy()
         t4 = t4.sort_values(["company_full", "date"], ascending=[True, False])
-        t4["3M Avg YoY%"] = t4["3M Avg YoY%"].apply(
-            lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-        )
-        t4 = t4.rename(columns={"company_full": "Company", "date": "Sort Date"})
+        t4["rev_current"] = t4["rev_current"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+        t4["3M Avg Rev"]  = t4["3M Avg Rev"].apply(lambda x: f"{x:,.0f}"  if pd.notna(x) else "")
+        t4["3M Avg YoY%"] = t4["3M Avg YoY%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
+        t4["mom_pct"]     = t4["mom_pct"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
+        t4 = t4.rename(columns={
+            "company_full": "Company", "date": "Sort Date",
+            "rev_current": "Revenue (TWD k)", "3M Avg Rev": "3M Avg Rev (TWD k)",
+            "3M Avg YoY%": "3M Avg YoY%", "mom_pct": "MoM %"
+        })
         st.dataframe(
             t4,
             column_config={
-                "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
-                "Company":   st.column_config.TextColumn("Company", width="small"),
-                "3M Avg YoY%": st.column_config.TextColumn("3M Avg YoY%", width="small"),
+                "Sort Date":           st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "Company":             st.column_config.TextColumn("Company",             width="small"),
+                "Revenue (TWD k)":     st.column_config.TextColumn("Revenue (TWD k)",     width="medium"),
+                "3M Avg Rev (TWD k)":  st.column_config.TextColumn("3M Avg Rev (TWD k)",  width="medium"),
+                "3M Avg YoY%":         st.column_config.TextColumn("3M Avg YoY%",         width="small"),
+                "MoM %":               st.column_config.TextColumn("MoM %",               width="small"),
             },
-            column_order=["Company", "Sort Date", "3M Avg YoY%"],
+            column_order=["Company", "Sort Date", "Revenue (TWD k)", "3M Avg Rev (TWD k)", "3M Avg YoY%", "MoM %"],
             use_container_width=True
         )
 
-# ── Tab 4: 6M Avg YoY Trend ───────────────────────────────────────────────────
-with tab4:
+# ── Tab 5: 6M Avg YoY Trend ───────────────────────────────────────────────────
+with tab5:
     st.subheader("6-Month Average YoY Growth (%)")
-    st.caption("Smoothed YoY: 6M rolling average revenue vs same period prior year. Best for identifying structural cycle turns.")
+    st.caption("Smoothed YoY: 6M rolling average revenue vs same period prior year.")
+
+    chart_type_6m = st.radio("Chart type", ["Line", "Bar"], horizontal=True, key="chart_6m")
 
     roll6_df = rev_df[rev_df["stock_id"].isin(selected)].copy()
     roll6_df = roll6_df.sort_values(["company", "date"], ascending=[True, True])
@@ -535,89 +646,152 @@ with tab4:
     if roll6_df.empty:
         st.warning("No data available for the selected filters.")
     else:
-        fig5 = px.line(
-            roll6_df, x="date", y="6M Avg YoY%", color="company",
-            labels={"6M Avg YoY%": "6M Avg YoY %", "date": "Month"},
-            color_discrete_sequence=BRAND_COLORS
-        )
+        if chart_type_6m == "Line":
+            fig5 = px.line(
+                roll6_df, x="date", y="6M Avg YoY%", color="company",
+                labels={"6M Avg YoY%": "6M Avg YoY %", "date": "Month"},
+                color_discrete_sequence=BRAND_COLORS
+            )
+        else:
+            fig5 = px.bar(
+                roll6_df, x="date", y="6M Avg YoY%", color="company",
+                barmode="group",
+                labels={"6M Avg YoY%": "6M Avg YoY %", "date": "Month"},
+                color_discrete_sequence=BRAND_COLORS
+            )
         fig5.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
         fig5.update_layout(
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            hovermode="x unified",
-            plot_bgcolor="white",
+            hovermode="x unified", plot_bgcolor="white",
             yaxis=dict(gridcolor="#eeeeee", zeroline=True, zerolinecolor="#cccccc"),
             xaxis=dict(gridcolor="#eeeeee"),
         )
-        fig5.update_traces(line=dict(width=2))
+        if chart_type_6m == "Line":
+            fig5.update_traces(line=dict(width=2))
         st.plotly_chart(fig5, use_container_width=True)
 
-        # Table
-        t5 = roll6_df[["company_full", "date", "6M Avg YoY%"]].copy()
+        t5 = roll6_df[["company_full", "date", "rev_current", "6M Avg Rev", "6M Avg YoY%", "mom_pct"]].copy()
         t5 = t5.sort_values(["company_full", "date"], ascending=[True, False])
-        t5["6M Avg YoY%"] = t5["6M Avg YoY%"].apply(
-            lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-        )
-        t5 = t5.rename(columns={"company_full": "Company", "date": "Sort Date"})
+        t5["rev_current"] = t5["rev_current"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+        t5["6M Avg Rev"]  = t5["6M Avg Rev"].apply(lambda x: f"{x:,.0f}"  if pd.notna(x) else "")
+        t5["6M Avg YoY%"] = t5["6M Avg YoY%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
+        t5["mom_pct"]     = t5["mom_pct"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
+        t5 = t5.rename(columns={
+            "company_full": "Company", "date": "Sort Date",
+            "rev_current": "Revenue (TWD k)", "6M Avg Rev": "6M Avg Rev (TWD k)",
+            "6M Avg YoY%": "6M Avg YoY%", "mom_pct": "MoM %"
+        })
         st.dataframe(
             t5,
             column_config={
-                "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
-                "Company":   st.column_config.TextColumn("Company", width="small"),
-                "6M Avg YoY%": st.column_config.TextColumn("6M Avg YoY%", width="small"),
+                "Sort Date":           st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "Company":             st.column_config.TextColumn("Company",             width="small"),
+                "Revenue (TWD k)":     st.column_config.TextColumn("Revenue (TWD k)",     width="medium"),
+                "6M Avg Rev (TWD k)":  st.column_config.TextColumn("6M Avg Rev (TWD k)",  width="medium"),
+                "6M Avg YoY%":         st.column_config.TextColumn("6M Avg YoY%",         width="small"),
+                "MoM %":               st.column_config.TextColumn("MoM %",               width="small"),
             },
-            column_order=["Company", "Sort Date", "6M Avg YoY%"],
+            column_order=["Company", "Sort Date", "Revenue (TWD k)", "6M Avg Rev (TWD k)", "6M Avg YoY%", "MoM %"],
             use_container_width=True
         )
 
-# ── Tab 5: Price vs Fundamentals ──────────────────────────────────────────────
-with tab5:
+# ── Tab 6: Price vs Fundamentals ──────────────────────────────────────────────
+with tab6:
     st.subheader("Price vs Fundamentals")
 
     if len(selected) == 1:
         sid   = selected[0]
-        rev   = rev_df[rev_df["stock_id"] == sid][["date", "yoy_pct"]].dropna()
+        rev   = rev_df[rev_df["stock_id"] == sid][["date", "yoy_pct", "rev_current"]].dropna(subset=["yoy_pct"])
         rev   = apply_date_filter(rev)
-        price = price_df[price_df["stock_id"] == sid][["month", "m_close"]].rename(
-            columns={"month": "date"}
-        )
+        price = price_df[price_df["stock_id"] == sid][["month", "m_close"]].rename(columns={"month": "date"})
         price = apply_date_filter(price)
         merged = pd.merge(rev, price, on="date", how="inner")
 
         if merged.empty:
             st.warning("No overlapping dates between revenue and price data for this stock.")
         else:
-            merged["price_chg"] = merged["m_close"].pct_change() * 100
-            fig3 = go.Figure()
-            fig3.add_trace(go.Scatter(
-                x=merged["date"], y=merged["yoy_pct"],
-                name="Revenue YoY %",
-                line=dict(color="#1D9E75", width=2)
-            ))
-            fig3.add_trace(go.Scatter(
-                x=merged["date"], y=merged["price_chg"],
-                name="Price MoM %",
-                line=dict(color="#378ADD", width=2),
-                yaxis="y2"
-            ))
-            fig3.update_layout(
-                title=f"{WATCHLIST_DISPLAY.get(sid, sid)}",
-                yaxis=dict(
-                    title="Revenue YoY %",
-                    gridcolor="#eeeeee",
-                    zeroline=True,
-                    zerolinecolor="#cccccc"
-                ),
-                yaxis2=dict(
-                    title="Price MoM %",
-                    overlaying="y",
-                    side="right",
-                    gridcolor="#eeeeee"
-                ),
-                hovermode="x unified",
-                plot_bgcolor="white",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            st.plotly_chart(fig3, use_container_width=True)
+            merged = merged.sort_values("date")
+            merged["price_3m_chg"] = merged["m_close"].pct_change(3) * 100
+
+            use_log = st.checkbox("Log scale — Revenue vs Share Price", value=False)
+
+            if use_log:
+                merged_log = merged.dropna(subset=["m_close", "rev_current"])
+                merged_log = merged_log[merged_log["m_close"] > 0]
+                merged_log = merged_log[merged_log["rev_current"] > 0]
+
+                fig_log = go.Figure()
+                fig_log.add_trace(go.Scatter(
+                    x=merged_log["date"],
+                    y=np.log(merged_log["rev_current"]),
+                    name="ln(Revenue TWD k)",
+                    line=dict(color="#1D9E75", width=2)
+                ))
+                fig_log.add_trace(go.Scatter(
+                    x=merged_log["date"],
+                    y=np.log(merged_log["m_close"]),
+                    name="ln(Share Price TWD)",
+                    line=dict(color="#378ADD", width=2),
+                    yaxis="y2"
+                ))
+                fig_log.update_layout(
+                    title=f"{WATCHLIST_DISPLAY.get(sid, sid)} — Log Scale: Revenue vs Share Price",
+                    yaxis=dict(
+                        title="ln(Revenue)",
+                        gridcolor="#eeeeee",
+                        zeroline=True, zerolinecolor="#cccccc"
+                    ),
+                    yaxis2=dict(
+                        title="ln(Share Price)",
+                        overlaying="y", side="right",
+                        gridcolor="#eeeeee"
+                    ),
+                    hovermode="x unified", plot_bgcolor="white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                )
+                st.plotly_chart(fig_log, use_container_width=True)
+                st.caption(
+                    "Log scale shows proportional growth rates. Parallel lines indicate revenue and "
+                    "price growing at similar rates; divergence signals re-rating or de-rating."
+                )
+
+            else:
+                fig3 = go.Figure()
+                fig3.add_trace(go.Bar(
+                    x=merged["date"], y=merged["yoy_pct"],
+                    name="Revenue YoY %",
+                    marker_color="#1D9E75",
+                    opacity=0.75,
+                    yaxis="y"
+                ))
+                fig3.add_trace(go.Scatter(
+                    x=merged["date"], y=merged["price_3m_chg"],
+                    name="Price 3M Chg %",
+                    line=dict(color="#378ADD", width=2.5),
+                    yaxis="y2"
+                ))
+                max_abs_price = merged["price_3m_chg"].abs().max()
+                price_range = [-max_abs_price * 1.5, max_abs_price * 1.5]
+
+                fig3.update_layout(
+                    title=f"{WATCHLIST_DISPLAY.get(sid, sid)}",
+                    yaxis=dict(
+                        title="Revenue YoY %",
+                        gridcolor="#eeeeee",
+                        zeroline=True, zerolinecolor="#cccccc"
+                    ),
+                    yaxis2=dict(
+                        title="Price 3M Chg %",
+                        overlaying="y", side="right",
+                        gridcolor="#eeeeee",
+                        range=price_range,
+                        zeroline=True, zerolinecolor="#cccccc"
+                    ),
+                    hovermode="x unified", plot_bgcolor="white",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    bargap=0.2,
+                )
+                st.plotly_chart(fig3, use_container_width=True)
 
     else:
         st.info(
@@ -630,18 +804,18 @@ with tab5:
         if ann.empty:
             st.warning("No annual return data available for the selected filters.")
         else:
-            fig4 = px.bar(
+            fig_ann = px.bar(
                 ann, x="year", y="annual_return", color="company",
                 barmode="group",
                 labels={"annual_return": "Annual Return %", "year": "Year"},
                 title="Annual Stock Return (%)",
                 color_discrete_sequence=BRAND_COLORS
             )
-            fig4.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-            fig4.update_layout(
+            fig_ann.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+            fig_ann.update_layout(
                 plot_bgcolor="white",
                 yaxis=dict(gridcolor="#eeeeee"),
                 xaxis=dict(gridcolor="#eeeeee"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
-            st.plotly_chart(fig4, use_container_width=True)
+            st.plotly_chart(fig_ann, use_container_width=True)
