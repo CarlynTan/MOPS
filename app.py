@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from datetime import date
 import google.generativeai as genai
 
-st.set_page_config(page_title="Silicon Strait", layout="wide")
+st.set_page_config(page_title="", layout="wide")
 
 st.markdown("""
     <style>
