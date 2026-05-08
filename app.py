@@ -490,16 +490,30 @@ with tab7:
 with tab8:
     st.subheader("Revenue Heatmap")
     st.info("💡 This heatmap is most useful when **5 or more companies** are selected. With fewer selections, patterns across companies may not be meaningful.")
-    hm_metric = st.radio("Metric",["Both","YoY %","Revenue (TWD mn)"],horizontal=True,key="hm_metric")
+    hm_metric = st.radio("Metric",["YoY %","Revenue (TWD mn)","Both"],horizontal=True,key="hm_metric")
 
     hm_base = rev_df[rev_df["stock_id"].isin(selected)].copy()
     hm_base["rev_mn"] = hm_base["rev_current"] / 1000
     hm_base = apply_date_filter(hm_base)
 
+    # Count how many months are selected
+    n_months = len(hm_base["date"].unique()) if not hm_base.empty else 0
+    show_text = n_months <= 24
+
+    if not show_text:
+        st.caption("ℹ️ Text labels hidden — more than 24 months selected. Hover over cells to see values.")
+
     def render_heatmap(df, val_col, title, fmt_str, color_scale, key):
         pivot = df.pivot_table(index="company",columns="date",values=val_col,aggfunc="mean")
         pivot.columns = [c.strftime("%b-%y") for c in pivot.columns]
-        z_text = [[fmt_str.format(v) if pd.notna(v) else "" for v in row] for row in pivot.values]
+
+        if show_text:
+            z_text     = [[fmt_str.format(v) if pd.notna(v) else "" for v in row] for row in pivot.values]
+            texttemplate = "%{text}"
+        else:
+            z_text     = None
+            texttemplate = ""
+
         fig = go.Figure(data=go.Heatmap(
             z=pivot.values,
             x=pivot.columns.tolist(),
@@ -507,8 +521,9 @@ with tab8:
             colorscale=color_scale,
             zmid=0 if "%" in fmt_str else None,
             text=z_text,
-            texttemplate="%{text}",
-            hovertemplate="Company: %{y}<br>Month: %{x}<br>Value: %{text}<extra></extra>",
+            texttemplate=texttemplate,
+            hovertemplate="Company: %{y}<br>Month: %{x}<br>Value: %{text}<extra></extra>" if show_text
+                          else "Company: %{y}<br>Month: %{x}<br>Value: %{z:.1f}<extra></extra>",
         ))
         fig.update_layout(
             title=title,
@@ -525,7 +540,7 @@ with tab8:
             render_heatmap(hm_base,"yoy_pct","YoY Revenue Growth (%)","{:.1f}%","RdYlGn","hm1")
         if hm_metric in ["Revenue (TWD mn)","Both"]:
             render_heatmap(hm_base,"rev_mn","Monthly Revenue (TWD millions)","{:,.1f}","Blues","hm2")
-
+            
 # ── Tab 9: Cycle Position ─────────────────────────────────────────────────────
 with tab9:
     st.subheader("Cycle Positioning")
