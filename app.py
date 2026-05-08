@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 from sqlalchemy import create_engine
 from datetime import date
 
-st.set_page_config(page_title="Silicon Strait", layout="wide")
+st.set_page_config(page_title="Taiwan Semi Monitor", layout="wide")
 
 st.markdown("""
     <style>
@@ -278,7 +278,7 @@ with st.sidebar:
     st.caption("Source: MOPS / Yahoo Finance")
     st.caption(f"Last refreshed: {date.today().strftime('%d %b %Y')}")
 
-st.title("Silicon Strait · Taiwan Semi Monitor")
+st.title("Taiwan Semi Monitor")
 st.caption(f"Covering {len(WATCHLIST)} companies across {len(SUBSECTORS)} sub-sectors · Data as of {latest_month.strftime('%b %Y')} · Source: MOPS / Yahoo Finance")
 st.divider()
 
