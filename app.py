@@ -490,7 +490,7 @@ with tab7:
 with tab8:
     st.subheader("Revenue Heatmap")
     st.info("💡 This heatmap is most useful when **5 or more companies** are selected. With fewer selections, patterns across companies may not be meaningful.")
-    hm_metric = st.radio("Metric",["YoY %","Revenue (TWD mn)","Both"],horizontal=True,key="hm_metric")
+    hm_metric = st.radio("Metric",["Both","YoY %","Revenue (TWD mn)"],horizontal=True,key="hm_metric")
 
     hm_base = rev_df[rev_df["stock_id"].isin(selected)].copy()
     hm_base["rev_mn"] = hm_base["rev_current"] / 1000
