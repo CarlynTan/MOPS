@@ -651,43 +651,29 @@ with tab10:
         (wafer suppliers, foundries) should theoretically lead downstream companies
         (IC designers, ODMs) because orders flow downstream-to-upstream before revenue is recognised.
 
-        ### Step 1 — 6M Avg YoY% as the base signal
-        Raw monthly revenue is noisy. We use the 6-month rolling average YoY% — the same metric
-        as the Cycle Position tab — as the base signal. It smooths seasonal and one-off effects
-        without over-smoothing genuine cycle turns.
+        ### Step 1 — Signal selection
+        Choose the revenue signal to use as input. Each option has different noise characteristics:
+        - **YoY %** — raw monthly year-on-year growth. Most sensitive, most noisy.
+        - **3M Avg YoY%** — 3-month rolling average YoY. Moderate smoothing.
+        - **6M Avg YoY%** — 6-month rolling average YoY. Most smoothed, best for structural cycle signals.
+        - **MoM %** — raw month-on-month change. Very noisy, best for short-lag detection only.
 
         ### Step 2 — Lagged Pearson correlation
-        For every pair of companies (A, B) and every lag k (from −max to +max months), we compute:
+        For every pair of companies (A, B) and every lag k (from −max to +max months):
 
         **corr( A(t), B(t+k) )**
 
-        A positive correlation at lag k=+3 means: *"when A is strong today, B tends to be strong
-        3 months later"* — i.e. **A leads B by 3 months**.
+        Positive correlation at lag k=+3 means: *A's signal today correlates with B's signal 3 months later* — A leads B by 3 months.
 
-        A negative lag (k=−2) means B actually leads A.
+        ### Step 3 — Rolling window
+        Correlations use only the most recent N months to reflect current supply chain dynamics.
 
-        ### Step 3 — Rolling 24-month window
-        Correlations use only the most recent N months (default 24). This captures current
-        supply chain dynamics rather than a decade-long average that may mix structurally
-        different demand regimes (pre-AI vs post-AI, COVID distortion period, etc.).
-
-        ### Step 4 — Peak lag identification
-        For each pair, we find the lag k where correlation is highest. This is the
-        **optimal lead time** — the number of months by which one company's revenue trend
-        best predicts the other's.
-
-        ### How to read the heatmap
-        - **Rows** = leading company (signal source)
-        - **Columns** = lagging company (signal target)
-        - **Cell colour** = peak correlation strength (green = strong positive)
-        - **Number in cell** = lag in months at peak (e.g. +3 = row leads column by 3 months)
-        - Diagonal is always 1.0 / 0m (self-correlation)
+        ### Step 4 — Peak lag
+        For each pair, the lag where correlation is highest is the optimal lead time.
 
         ### Caveats
-        - High correlation ≠ causation. Common macro exposure can produce spurious lead-lag signals.
-        - Fewer months selected = less statistical reliability.
-        - Companies with thin or erratic history may show unstable correlations.
-        - This is a quantitative screen to generate hypotheses, not a definitive causal map.
+        High correlation ≠ causation. Common macro exposure can produce spurious signals.
+        Always verify with the drill-down chart and cross-check against fundamental supply chain logic.
         """)
 
     st.divider()
@@ -696,48 +682,61 @@ with tab10:
         st.warning("Select at least 2 companies to run lead-lag analysis.")
     else:
         # ── Controls ──────────────────────────────────────────────────────────
-        col_l, col_r = st.columns([1, 2])
-        with col_l:
+        col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1,1,1])
+        with col_ctrl1:
+            signal_choice = st.selectbox(
+                "Revenue signal",
+                options=["6M Avg YoY%","3M Avg YoY%","YoY %","MoM %"],
+                key="ll_signal",
+                help="Signal used as input for correlation. More smoothing = less noise but slower to react."
+            )
+        with col_ctrl2:
             max_lag = st.slider(
                 "Max lag range (months)", min_value=3, max_value=12, value=6, step=1,
                 help="Tests correlations from −N to +N months."
             )
+        with col_ctrl3:
             roll_window = st.slider(
                 "Rolling window (months)", min_value=12, max_value=60, value=24, step=6,
                 help="Months of history used to compute correlations."
             )
 
-        # ── Compute 6M Avg YoY ───────────────────────────────────────────────
+        # ── Compute chosen signal ─────────────────────────────────────────────
         ll = rev_df[rev_df["stock_id"].isin(selected)].copy().sort_values(["company","date"])
-        ll["6M Avg Rev"]  = ll.groupby("company")["rev_current"].transform(
-            lambda x: x.rolling(6, min_periods=3).mean()
-        )
-        ll["6M Avg YoY%"] = ll.groupby("company")["6M Avg Rev"].transform(
-            lambda x: x.pct_change(12) * 100
-        )
-        ll = ll.dropna(subset=["6M Avg YoY%"])
 
-        # ── Pivot to wide ────────────────────────────────────────────────────
-        pivot_ll = ll.pivot_table(index="date", columns="company", values="6M Avg YoY%")
+        if signal_choice == "6M Avg YoY%":
+            ll["_6m"] = ll.groupby("company")["rev_current"].transform(lambda x: x.rolling(6,min_periods=3).mean())
+            ll["_sig"] = ll.groupby("company")["_6m"].transform(lambda x: x.pct_change(12)*100)
+        elif signal_choice == "3M Avg YoY%":
+            ll["_3m"] = ll.groupby("company")["rev_current"].transform(lambda x: x.rolling(3,min_periods=2).mean())
+            ll["_sig"] = ll.groupby("company")["_3m"].transform(lambda x: x.pct_change(12)*100)
+        elif signal_choice == "YoY %":
+            ll["_sig"] = ll["yoy_pct"]
+        else:  # MoM %
+            ll["_sig"] = ll["mom_pct"]
+
+        ll = ll.dropna(subset=["_sig"])
+
+        # ── Pivot to wide ─────────────────────────────────────────────────────
+        pivot_ll = ll.pivot_table(index="date", columns="company", values="_sig")
         pivot_ll = pivot_ll.sort_index()
         companies = pivot_ll.columns.tolist()
-        lags = list(range(-max_lag, max_lag + 1))
+        lags = list(range(-max_lag, max_lag+1))
 
-        # ── Trailing window ───────────────────────────────────────────────────
         cutoff = pivot_ll.index.max() - pd.DateOffset(months=roll_window)
         pivot_roll = pivot_ll[pivot_ll.index >= cutoff].copy()
 
         if len(pivot_roll) < 6:
-            st.warning("Not enough data in the selected window. Try increasing the rolling window or selecting more years.")
+            st.warning("Not enough data. Try increasing the rolling window or selecting more years.")
         else:
             # ── Compute peak lag matrix ───────────────────────────────────────
             n = len(companies)
-            peak_corr_vals = np.full((n, n), np.nan)
-            peak_lag_vals  = np.zeros((n, n), dtype=int)
+            peak_corr_vals = np.full((n,n), np.nan)
+            peak_lag_vals  = np.zeros((n,n), dtype=int)
 
-            for i, a in enumerate(companies):
-                for j, b in enumerate(companies):
-                    if i == j:
+            for i,a in enumerate(companies):
+                for j,b in enumerate(companies):
+                    if i==j:
                         peak_corr_vals[i,j] = 1.0
                         peak_lag_vals[i,j]  = 0
                         continue
@@ -745,13 +744,12 @@ with tab10:
                     for k in lags:
                         s_a = pivot_roll[a]
                         s_b = pivot_roll[b].shift(-k)
-                        combined = pd.concat([s_a, s_b], axis=1).dropna()
-                        if len(combined) < 6:
-                            continue
+                        combined = pd.concat([s_a,s_b],axis=1).dropna()
+                        if len(combined) < 6: continue
                         r = combined.iloc[:,0].corr(combined.iloc[:,1])
                         if pd.notna(r) and r > best_r:
                             best_r, best_k = r, k
-                    peak_corr_vals[i,j] = round(best_r, 2) if best_r != -999 else np.nan
+                    peak_corr_vals[i,j] = round(best_r,2) if best_r != -999 else np.nan
                     peak_lag_vals[i,j]  = best_k
 
             peak_corr_df = pd.DataFrame(peak_corr_vals, index=companies, columns=companies)
@@ -759,7 +757,7 @@ with tab10:
 
             # ── Heatmap ───────────────────────────────────────────────────────
             st.markdown("### Peak Correlation Heatmap")
-            st.caption("Colour = peak correlation. Number = lag in months at that peak (+N = row leads column by N months).")
+            st.caption("Colour = peak correlation strength. Number = lag in months (+N = row leads column by N months, −N = column leads row).")
 
             cell_text = [
                 [f"{peak_corr_df.iloc[i,j]:.2f}<br>({'+' if peak_lag_df.iloc[i,j]>=0 else ''}{peak_lag_df.iloc[i,j]}m)"
@@ -775,72 +773,98 @@ with tab10:
                 zmin=-1, zmax=1, zmid=0,
                 text=cell_text,
                 texttemplate="%{text}",
-                hovertemplate="Leading: %{y}<br>Lagging: %{x}<br>Peak corr: %{z:.2f}<extra></extra>",
+                hovertemplate="Row: %{y}<br>Col: %{x}<br>Peak corr: %{z:.2f}<extra></extra>",
             ))
             fig_hm.update_layout(
-                height=max(400, n*50+120),
+                height=max(400,n*50+120),
                 xaxis=dict(tickangle=-45, title="Lagging company →"),
                 yaxis=dict(title="Leading company ↑"),
-                margin=dict(l=150, r=20, t=40, b=120),
+                margin=dict(l=150,r=20,t=40,b=120),
             )
             st.plotly_chart(fig_hm, use_container_width=True, key="pc10_hm")
 
             # ── Summary table ─────────────────────────────────────────────────
             st.markdown("### Strongest Lead-Lag Pairs")
-            st.caption("Top pairs by peak correlation, excluding self-pairs. Positive lag = row company leads.")
-
             pairs = []
-            for i, a in enumerate(companies):
-                for j, b in enumerate(companies):
+            for i,a in enumerate(companies):
+                for j,b in enumerate(companies):
                     if i >= j: continue
                     r = peak_corr_df.iloc[i,j]
                     k = peak_lag_df.iloc[i,j]
                     if pd.notna(r):
+                        if k >= 0:
+                            leader, lagger, lead_months = a, b, k
+                        else:
+                            leader, lagger, lead_months = b, a, abs(k)
                         pairs.append({
-                            "Leading":     a if k >= 0 else b,
-                            "Lagging":     b if k >= 0 else a,
-                            "Lead (mths)": abs(k),
+                            "Leading":     leader,
+                            "Lagging":     lagger,
+                            "Lead (mths)": lead_months,
                             "Peak Corr":   f"{r:.2f}",
-                            "Signal":      "Strong" if r > 0.7 else ("Moderate" if r > 0.4 else "Weak"),
+                            "Signal":      "Strong" if r>0.7 else ("Moderate" if r>0.4 else "Weak"),
                         })
-            pairs_df = pd.DataFrame(pairs).sort_values("Peak Corr", ascending=False).head(15)
+            pairs_df = pd.DataFrame(pairs).sort_values("Peak Corr",ascending=False).head(15)
             st.dataframe(pairs_df, use_container_width=True, hide_index=True)
 
             st.divider()
 
-            # ── Line chart drill-down ─────────────────────────────────────────
-            st.markdown("### Drill-Down: Company Pair Correlation Over Time")
-            st.caption("Select a pair to see how their 6M Avg YoY% trends compare at the optimal lag.")
+            # ── Drill-down ────────────────────────────────────────────────────
+            st.markdown("### Drill-Down: Company Pair")
+            st.caption("The lagging company's line is shifted forward by the optimal lag so both series sit on the same timeline. Overlap confirms the relationship; recent divergence signals a breakdown.")
 
             col_a, col_b = st.columns(2)
             with col_a:
-                drill_a = st.selectbox("Company A (leading)", options=companies, key="drill_a")
+                drill_a = st.selectbox("Company A", options=companies, key="drill_a")
             with col_b:
-                drill_b = st.selectbox("Company B (lagging)", options=[c for c in companies if c != drill_a], key="drill_b")
+                remaining = [c for c in companies if c != drill_a]
+                drill_b = st.selectbox("Company B", options=remaining, key="drill_b")
 
             if drill_a and drill_b:
                 i_a = companies.index(drill_a)
                 i_b = companies.index(drill_b)
-                opt_lag  = int(peak_lag_df.iloc[i_a, i_b])
+
+                # Raw values from the matrix (A as row, B as col)
+                raw_lag  = int(peak_lag_df.iloc[i_a, i_b])
                 opt_corr = peak_corr_df.iloc[i_a, i_b]
 
-                st.info(
-                    f"**{drill_a}** leads **{drill_b}** by **{abs(opt_lag)} month(s)** "
-                    f"at a peak correlation of **{opt_corr:.2f}** "
-                    f"(over trailing {roll_window}-month window)"
-                )
+                # Determine direction from the lag sign
+                # positive lag = A leads B, negative lag = B leads A
+                if raw_lag >= 0:
+                    leader      = drill_a
+                    lagger      = drill_b
+                    lead_months = raw_lag
+                    shift_by    = raw_lag
+                    shift_series = drill_b
+                    anchor_series = drill_a
+                else:
+                    leader      = drill_b
+                    lagger      = drill_a
+                    lead_months = abs(raw_lag)
+                    shift_by    = abs(raw_lag)
+                    shift_series = drill_a
+                    anchor_series = drill_b
 
-                s_a = pivot_ll[drill_a].rename(f"{drill_a} (t)")
-                s_b = pivot_ll[drill_b].shift(-opt_lag).rename(f"{drill_b} (t+{opt_lag}m)")
-                drill_df = pd.concat([s_a, s_b], axis=1).dropna().reset_index()
-                drill_df = drill_df.rename(columns={"date":"Date"})
-                drill_melt = drill_df.melt(id_vars="Date", var_name="Series", value_name="6M Avg YoY%")
+                if lead_months == 0:
+                    st.info(f"**{drill_a}** and **{drill_b}** move contemporaneously — no meaningful lead-lag (peak corr: {opt_corr:.2f})")
+                else:
+                    st.info(
+                        f"**{leader}** leads **{lagger}** by **{lead_months} month(s)** "
+                        f"at a peak correlation of **{opt_corr:.2f}** "
+                        f"(trailing {roll_window}-month window · signal: {signal_choice})"
+                    )
+
+                s_anchor = pivot_ll[anchor_series].rename(f"{anchor_series} — actual")
+                s_shift  = pivot_ll[shift_series].shift(-raw_lag).rename(
+                    f"{lagger} — shifted fwd {lead_months}m"
+                )
+                drill_df   = pd.concat([s_anchor, s_shift], axis=1).dropna().reset_index()
+                drill_melt = drill_df.melt(id_vars="date", var_name="Series", value_name=signal_choice)
 
                 fig_drill = px.line(
-                    drill_melt, x="Date", y="6M Avg YoY%", color="Series",
-                    labels={"6M Avg YoY%":"6M Avg YoY %","Date":"Month"},
+                    drill_melt, x="date", y=signal_choice, color="Series",
+                    labels={signal_choice: signal_choice, "date":"Month"},
                     color_discrete_sequence=["#1D9E75","#378ADD"],
-                    title=f"{drill_a} vs {drill_b} (shifted {opt_lag}m)"
+                    title=f"{leader} (leading) vs {lagger} (lagging, shifted +{lead_months}m)"
                 )
                 fig_drill.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.4)
                 fig_drill.update_traces(line=dict(width=2))
@@ -852,8 +876,7 @@ with tab10:
                 )
                 st.plotly_chart(fig_drill, use_container_width=True, key="pc10_drill")
                 st.caption(
-                    f"The lagging series ({drill_b}) is shifted forward by {opt_lag} month(s) to align with "
-                    f"{drill_a}. Overlap between the two lines confirms the lead-lag relationship. "
-                    f"Divergence in recent months may signal a breakdown in the historical relationship."
+                    f"{lagger} is shifted forward {lead_months} month(s) to align with {leader}'s timeline. "
+                    f"When the lines overlap, {leader} was successfully predicting {lagger}'s trajectory. "
+                    f"Divergence in recent months may indicate a regime change or demand driver shift."
                 )
-                
