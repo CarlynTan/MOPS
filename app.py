@@ -280,10 +280,16 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
     st.caption(f"Covering {len(WATCHLIST)} companies · Data as of {latest_month.strftime('%b %Y')} · Source: MOPS / Yahoo Finance")
     st.divider()
 
-    tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9,tab10 = st.tabs([
+ #   tab1,tab2,tab3,tab4,tab5,tab6,tab7,tab8,tab9,tab10 = st.tabs([
         "📊 Revenue (TWD)","💵 Revenue (USD)","🔀 TWD vs USD",
         "📈 Growth Momentum","📉 3M Avg YoY","📉 6M Avg YoY",
         "🔗 Price vs Fundamentals","🌡️ Heatmap","🔄 Cycle Position","🔗 Lead-Lag",
+    ])
+
+       tab1,tab2,tab3,tab4,tab5,tab6,tab7 = st.tabs([
+        "📊 Revenue (TWD)","💵 Revenue (USD)","🔀 TWD vs USD",
+        "📈 Growth Momentum","📉 3M Avg YoY","📉 6M Avg YoY",
+        "🔗 Price vs Fundamentals",
     ])
 
     with tab1:
