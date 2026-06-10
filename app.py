@@ -286,7 +286,7 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
         "🔗 Price vs Fundamentals","🌡️ Heatmap","🔄 Cycle Position","🔗 Lead-Lag",
     ])
 
-       tab1,tab2,tab3,tab4,tab5,tab6,tab7 = st.tabs([
+    tab1,tab2,tab3,tab4,tab5,tab6,tab7 = st.tabs([
         "📊 Revenue (TWD)","💵 Revenue (USD)","🔀 TWD vs USD",
         "📈 Growth Momentum","📉 3M Avg YoY","📉 6M Avg YoY",
         "🔗 Price vs Fundamentals",
