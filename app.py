@@ -448,7 +448,7 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
                                     legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
                 st.plotly_chart(fig7c,use_container_width=True,key="pc7c")
 
-    with tab8:
+    #with tab8:
         st.subheader("Revenue Heatmap")
         st.info("💡 Most useful when **5 or more companies** are selected.")
         hm_metric = st.radio("Metric",["Both","YoY %","Revenue (TWD mn)"],horizontal=True,key="hm_metric")
@@ -472,7 +472,7 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
             if hm_metric in ["YoY %","Both"]: render_heatmap(hm_base,"yoy_pct","YoY Revenue Growth (%)","{:.1f}%","RdYlGn","hm1")
             if hm_metric in ["Revenue (TWD mn)","Both"]: render_heatmap(hm_base,"rev_mn","Monthly Revenue (TWD millions)","{:,.1f}","Blues","hm2")
 
-    with tab9:
+   # with tab9:
         st.subheader("Cycle Positioning")
         st.markdown("""
         ### How cycle position is determined
@@ -520,7 +520,7 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
                                legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
             st.plotly_chart(fig9,use_container_width=True,key="pc9")
 
-    with tab10:
+   # with tab10:
         st.subheader("Cross-Sector Lead-Lag Analysis")
         with st.expander("📖 Methodology",expanded=False):
             st.markdown("""
