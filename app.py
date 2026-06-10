@@ -84,6 +84,8 @@ BRAND_COLORS = [
     "#2ECC71","#3498DB","#1ABC9C","#D35400","#8E44AD","#27AE60",
 ]
 
+PCT_COL_CONFIG = st.column_config.NumberColumn(format="%.1f%%")
+
 @st.cache_resource
 def get_engine():
     return create_engine(
@@ -144,8 +146,7 @@ def load_korea():
         df = pd.read_sql("SELECT * FROM korea_trade ORDER BY date", engine)
         df["date"] = pd.to_datetime(df["date"])
         return df
-    except Exception as e:
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 rev_df    = load_revenue()
 price_df  = load_prices()
@@ -197,8 +198,7 @@ def make_chart(df, x, y, color, labels, chart_type, colors=BRAND_COLORS):
 dashboard = st.radio(
     "Select Dashboard",
     ["🇹🇼 Taiwan Semi Monitor","🇰🇷 Korea Trade Monitor"],
-    horizontal=True,
-    key="dashboard_select"
+    horizontal=True, key="dashboard_select"
 )
 st.divider()
 
@@ -226,22 +226,29 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
         tbl["6M Avg YoY%"] = tbl.groupby("company")["6M Avg Rev"].transform(lambda x: x.pct_change(12)*100)
         tbl = apply_date_filter(tbl)
         tbl = tbl.sort_values(["company","date"],ascending=[True,False])
+
+        # Format revenue columns as strings (not sortable numerically but that's ok for revenue)
         nf = lambda x: (f"{x:,.2f}" if fmt=="2f" else f"{x:,.0f}") if pd.notna(x) else ""
-        pf = lambda x: f"{x:.1f}%" if pd.notna(x) else ""
-        tbl["rev_fmt"] = tbl[rev_col].apply(nf)
+        tbl["rev_fmt"]    = tbl[rev_col].apply(nf)
         tbl["3M Avg Rev"] = tbl["3M Avg Rev"].apply(nf)
         tbl["6M Avg Rev"] = tbl["6M Avg Rev"].apply(nf)
-        for col in ["3M Avg YoY%","6M Avg YoY%"]:
-            if col in tbl.columns: tbl[col] = tbl[col].apply(pf)
-        # keep yoy_pct and mom_pct numeric for sortable columns
+        # Keep all % columns numeric — column_config handles display
+
         show = ["company_full","date","rev_fmt"]
         if s3a: show += ["3M Avg Rev"]
         if s6a: show += ["6M Avg Rev"]
         if s3y: show += ["3M Avg YoY%"]
         if s6y: show += ["6M Avg YoY%"]
         show += [c for c in ["yoy_pct","mom_pct"] if c in tbl.columns]
-        out = tbl[show].copy().rename(columns={"company_full":"Company","date":"Sort Date","rev_fmt":f"Revenue ({unit_label})","yoy_pct":"YoY %","mom_pct":"MoM %"})
+
+        out = tbl[show].copy().rename(columns={
+            "company_full":"Company","date":"Sort Date",
+            "rev_fmt":f"Revenue ({unit_label})",
+            "yoy_pct":"YoY %","mom_pct":"MoM %",
+        })
+
         has_anomaly = tbl["_anom_high"].any() or tbl["_anom_low"].any()
+
         def highlight_anomaly(row):
             idx = row.name
             styles = [""] * len(row)
@@ -250,13 +257,18 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
                 if tbl.loc[idx,"_anom_high"]: styles[rev_col_pos] = "background-color: #d4edda"
                 elif tbl.loc[idx,"_anom_low"]: styles[rev_col_pos] = "background-color: #f8d7da"
             return styles
+
+        col_config = {
+            "Sort Date":  st.column_config.DateColumn("Month", format="MMM-YYYY"),
+            "YoY %":      st.column_config.NumberColumn("YoY %",      format="%.1f%%"),
+            "MoM %":      st.column_config.NumberColumn("MoM %",      format="%.1f%%"),
+            "3M Avg YoY%":st.column_config.NumberColumn("3M Avg YoY%",format="%.1f%%"),
+            "6M Avg YoY%":st.column_config.NumberColumn("6M Avg YoY%",format="%.1f%%"),
+        }
+
         st.dataframe(out.style.apply(highlight_anomaly,axis=1),
-                     column_config={
-                         "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
-                         "YoY %":     st.column_config.NumberColumn("YoY %",  format="%.1f%%"),
-                         "MoM %":     st.column_config.NumberColumn("MoM %",  format="%.1f%%"),
-                     },
-                     use_container_width=True)
+                     column_config=col_config, use_container_width=True)
+
         if has_anomaly:
             st.caption("🟩 Light green = revenue significantly above recent trend  ·  🟥 Light red = significantly below  ·  z-score > 1.8 from 6-month rolling average.")
 
@@ -357,9 +369,12 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
             fig4.add_hline(y=0,line_dash="dash",line_color="gray",opacity=0.5)
             st.plotly_chart(fig4,use_container_width=True,key="pc4")
             tbl4 = f4[["company_full","date","yoy_pct","mom_pct"]].copy().sort_values(["company_full","date"],ascending=[True,False])
-            for col in ["yoy_pct","mom_pct"]: tbl4[col] = tbl4[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
-            st.dataframe(tbl4.rename(columns={"company_full":"Company","date":"Sort Date","yoy_pct":"YoY %","mom_pct":"MoM %"}),
-                         column_config={"Sort Date":st.column_config.DateColumn("Month",format="MMM-YYYY")},use_container_width=True)
+            tbl4 = tbl4.rename(columns={"company_full":"Company","date":"Sort Date","yoy_pct":"YoY %","mom_pct":"MoM %"})
+            st.dataframe(tbl4, column_config={
+                "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "YoY %":     st.column_config.NumberColumn("YoY %", format="%.1f%%"),
+                "MoM %":     st.column_config.NumberColumn("MoM %", format="%.1f%%"),
+            }, use_container_width=True)
 
     with tab5:
         st.subheader("3-Month Average YoY Growth (%)")
@@ -375,11 +390,14 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
             fig5.add_hline(y=0,line_dash="dash",line_color="gray",opacity=0.5)
             st.plotly_chart(fig5,use_container_width=True,key="pc5")
             t5 = f5[["company_full","date","rev_current","3M Avg Rev","3M Avg YoY%","mom_pct"]].copy().sort_values(["company_full","date"],ascending=[True,False])
-            for col in ["rev_current","3M Avg Rev"]: t5[col] = t5[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
-            t5["3M Avg YoY%"] = t5["3M Avg YoY%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
-            t5["mom_pct"] = t5["mom_pct"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
-            st.dataframe(t5.rename(columns={"company_full":"Company","date":"Sort Date","rev_current":"Revenue (TWD k)","3M Avg Rev":"3M Avg Rev (TWD k)","mom_pct":"MoM %"}),
-                         column_config={"Sort Date":st.column_config.DateColumn("Month",format="MMM-YYYY")},use_container_width=True)
+            t5["rev_current"] = t5["rev_current"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+            t5["3M Avg Rev"]  = t5["3M Avg Rev"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+            t5 = t5.rename(columns={"company_full":"Company","date":"Sort Date","rev_current":"Revenue (TWD k)","3M Avg Rev":"3M Avg Rev (TWD k)","mom_pct":"MoM %"})
+            st.dataframe(t5, column_config={
+                "Sort Date":          st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "3M Avg YoY%":        st.column_config.NumberColumn("3M Avg YoY%", format="%.1f%%"),
+                "MoM %":              st.column_config.NumberColumn("MoM %",        format="%.1f%%"),
+            }, use_container_width=True)
 
     with tab6:
         st.subheader("6-Month Average YoY Growth (%)")
@@ -395,11 +413,14 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
             fig6.add_hline(y=0,line_dash="dash",line_color="gray",opacity=0.5)
             st.plotly_chart(fig6,use_container_width=True,key="pc6")
             t6 = f6[["company_full","date","rev_current","6M Avg Rev","6M Avg YoY%","mom_pct"]].copy().sort_values(["company_full","date"],ascending=[True,False])
-            for col in ["rev_current","6M Avg Rev"]: t6[col] = t6[col].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
-            t6["6M Avg YoY%"] = t6["6M Avg YoY%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
-            t6["mom_pct"] = t6["mom_pct"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
-            st.dataframe(t6.rename(columns={"company_full":"Company","date":"Sort Date","rev_current":"Revenue (TWD k)","6M Avg Rev":"6M Avg Rev (TWD k)","mom_pct":"MoM %"}),
-                         column_config={"Sort Date":st.column_config.DateColumn("Month",format="MMM-YYYY")},use_container_width=True)
+            t6["rev_current"] = t6["rev_current"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+            t6["6M Avg Rev"]  = t6["6M Avg Rev"].apply(lambda x: f"{x:,.0f}" if pd.notna(x) else "")
+            t6 = t6.rename(columns={"company_full":"Company","date":"Sort Date","rev_current":"Revenue (TWD k)","6M Avg Rev":"6M Avg Rev (TWD k)","mom_pct":"MoM %"})
+            st.dataframe(t6, column_config={
+                "Sort Date":   st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "6M Avg YoY%": st.column_config.NumberColumn("6M Avg YoY%", format="%.1f%%"),
+                "MoM %":       st.column_config.NumberColumn("MoM %",        format="%.1f%%"),
+            }, use_container_width=True)
 
     with tab7:
         st.subheader("Price vs Fundamentals")
@@ -729,9 +750,12 @@ else:
         tbl_kr1 = kr_date_filter(kr_df[["date","exp_semi","exp_10d_semi","exp_10d_semi_yoy","exp_20d_semi","exp_20d_semi_yoy","exp_25d_semi"]].copy()).sort_values("date",ascending=False)
         tbl_kr1["est"] = tbl_kr1["date"].apply(lambda d: "⚠️ Est." if d==latest_date and not month_complete else "")
         for col in ["exp_semi","exp_10d_semi","exp_20d_semi","exp_25d_semi"]: tbl_kr1[col]=tbl_kr1[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "—")
-        for col in ["exp_10d_semi_yoy","exp_20d_semi_yoy"]: tbl_kr1[col]=tbl_kr1[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
         st.dataframe(tbl_kr1.rename(columns={"date":"Month","est":"Status","exp_semi":"Full Month","exp_10d_semi":"10-Day Semi","exp_10d_semi_yoy":"10D YoY%","exp_20d_semi":"20-Day Semi","exp_20d_semi_yoy":"20D YoY%","exp_25d_semi":"25-Day Semi"}),
-                     column_config={"Month":st.column_config.DateColumn("Month",format="MMM-YYYY")},use_container_width=True)
+                     column_config={
+                         "Month":    st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                         "10D YoY%": st.column_config.NumberColumn("10D YoY%", format="%.1f%%"),
+                         "20D YoY%": st.column_config.NumberColumn("20D YoY%", format="%.1f%%"),
+                     }, use_container_width=True)
         st.caption("All values USD millions. ⚠️ Est. = month in progress.")
 
     with kr_tab2:
@@ -838,7 +862,12 @@ else:
         tbl_kr2=kr_date_filter(kr_df[["date","imp_10d_semi","imp_10d_sme","imp_10d_semi_yoy","imp_10d_sme_yoy","imp_20d_semi","imp_20d_sme","imp_20d_semi_yoy","imp_20d_sme_yoy"]].copy()).sort_values("date",ascending=False)
         tbl_kr2["est"]=tbl_kr2["date"].apply(lambda d: "⚠️ Est." if d==latest_date and not month_complete else "")
         for col in ["imp_10d_semi","imp_10d_sme","imp_20d_semi","imp_20d_sme"]: tbl_kr2[col]=tbl_kr2[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "—")
-        for col in ["imp_10d_semi_yoy","imp_10d_sme_yoy","imp_20d_semi_yoy","imp_20d_sme_yoy"]: tbl_kr2[col]=tbl_kr2[col].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
         st.dataframe(tbl_kr2.rename(columns={"date":"Month","est":"Status","imp_10d_semi":"10D Semi","imp_10d_sme":"10D SME","imp_10d_semi_yoy":"10D Semi YoY%","imp_10d_sme_yoy":"10D SME YoY%","imp_20d_semi":"20D Semi","imp_20d_sme":"20D SME","imp_20d_semi_yoy":"20D Semi YoY%","imp_20d_sme_yoy":"20D SME YoY%"}),
-                     column_config={"Month":st.column_config.DateColumn("Month",format="MMM-YYYY")},use_container_width=True)
+                     column_config={
+                         "Month":          st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                         "10D Semi YoY%":  st.column_config.NumberColumn("10D Semi YoY%",  format="%.1f%%"),
+                         "10D SME YoY%":   st.column_config.NumberColumn("10D SME YoY%",   format="%.1f%%"),
+                         "20D Semi YoY%":  st.column_config.NumberColumn("20D Semi YoY%",  format="%.1f%%"),
+                         "20D SME YoY%":   st.column_config.NumberColumn("20D SME YoY%",   format="%.1f%%"),
+                     }, use_container_width=True)
         st.caption("All values USD millions. SME = Semiconductor Manufacturing Equipment. ⚠️ Est. = month in progress.")
