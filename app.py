@@ -93,7 +93,7 @@ def get_engine():
         f"@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres"
     )
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=60)
 def load_revenue():
     engine = get_engine()
     df = pd.read_sql("SELECT stock_id, report_month, rev_current, yoy_pct, mom_pct FROM monthly_revenue ORDER BY stock_id, report_month", engine)
