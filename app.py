@@ -231,8 +231,9 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
         tbl["rev_fmt"] = tbl[rev_col].apply(nf)
         tbl["3M Avg Rev"] = tbl["3M Avg Rev"].apply(nf)
         tbl["6M Avg Rev"] = tbl["6M Avg Rev"].apply(nf)
-        for col in ["yoy_pct","mom_pct","3M Avg YoY%","6M Avg YoY%"]:
+        for col in ["3M Avg YoY%","6M Avg YoY%"]:
             if col in tbl.columns: tbl[col] = tbl[col].apply(pf)
+        # keep yoy_pct and mom_pct numeric for sortable columns
         show = ["company_full","date","rev_fmt"]
         if s3a: show += ["3M Avg Rev"]
         if s6a: show += ["6M Avg Rev"]
@@ -250,7 +251,11 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
                 elif tbl.loc[idx,"_anom_low"]: styles[rev_col_pos] = "background-color: #f8d7da"
             return styles
         st.dataframe(out.style.apply(highlight_anomaly,axis=1),
-                     column_config={"Sort Date":st.column_config.DateColumn("Month",format="MMM-YYYY")},
+                     column_config={
+                         "Sort Date": st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                         "YoY %":     st.column_config.NumberColumn("YoY %",  format="%.1f%%"),
+                         "MoM %":     st.column_config.NumberColumn("MoM %",  format="%.1f%%"),
+                     },
                      use_container_width=True)
         if has_anomaly:
             st.caption("🟩 Light green = revenue significantly above recent trend  ·  🟥 Light red = significantly below  ·  z-score > 1.8 from 6-month rolling average.")
