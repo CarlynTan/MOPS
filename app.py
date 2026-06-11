@@ -648,7 +648,7 @@ else:
                 st.warning("Select at least one year and month."); st.stop()
         st.divider()
         latest_kr = kr_df["date"].max() if not kr_df.empty else None
-        if latest_kr: st.caption(f"📅 Data as of **{latest_kr.strftime('%b %Y')}**")
+        if latest_kr: st.caption(f"📅 Data as of **{latest_kr.strftime('%d %b %Y')}**")
         st.caption("Source: MOTIE / Korea Customs")
         st.caption(f"Last refreshed: {date.today().strftime('%d %b %Y')}")
 
@@ -660,9 +660,7 @@ else:
     def kr_date_filter(df):
         return df[(df["date"].dt.year.isin(kr_sel_years))&(df["date"].dt.month.isin(kr_sel_months))]
 
-    # ── Helper: get latest available value across checkpoints ─────────────────
     def get_latest_val(row, cols):
-        """Return first non-null value from cols list, and which col it came from."""
         for col in cols:
             v = row.get(col)
             if pd.notna(v) and (v or 0) > 0:
@@ -670,39 +668,26 @@ else:
         return None, None
 
     CHECKPOINT_LABEL = {
-        "exp_semi":      "Full month",
-        "exp_25d_semi":  "25-day",
-        "exp_20d_semi":  "20-day",
-        "exp_10d_semi":  "10-day",
-        "imp_10d_semi":  "10-day",
-        "imp_20d_semi":  "20-day",
-        "imp_10d_sme":   "10-day",
-        "imp_20d_sme":   "20-day",
-        "exp_10d_semi_yoy": "10-day YoY",
+        "exp_semi":         "Full month",
+        "exp_25d_semi":     "25-day",
+        "exp_20d_semi":     "20-day",
+        "exp_10d_semi":     "10-day",
+        "imp_20d_semi":     "20-day",
+        "imp_10d_semi":     "10-day",
+        "imp_20d_sme":      "20-day",
+        "imp_10d_sme":      "10-day",
         "exp_20d_semi_yoy": "20-day YoY",
-        "imp_10d_semi_yoy": "10-day YoY",
+        "exp_10d_semi_yoy": "10-day YoY",
         "imp_20d_semi_yoy": "20-day YoY",
-        "imp_10d_sme_yoy":  "10-day YoY",
+        "imp_10d_semi_yoy": "10-day YoY",
         "imp_20d_sme_yoy":  "20-day YoY",
+        "imp_10d_sme_yoy":  "10-day YoY",
     }
 
     latest_date = kr_df["date"].max()
     latest_row  = kr_df[kr_df["date"]==latest_date].iloc[0]
 
-    # Get latest export semi value
-    exp_val, exp_col = get_latest_val(latest_row, ["exp_semi","exp_25d_semi","exp_20d_semi","exp_10d_semi"])
-    exp_yoy_val, exp_yoy_col = get_latest_val(latest_row, ["exp_20d_semi_yoy","exp_10d_semi_yoy"])
-    imp_val, imp_col = get_latest_val(latest_row, ["imp_20d_semi","imp_10d_semi"])
-    imp_yoy_val, imp_yoy_col = get_latest_val(latest_row, ["imp_20d_semi_yoy","imp_10d_semi_yoy"])
-    sme_val, sme_col = get_latest_val(latest_row, ["imp_20d_sme","imp_10d_sme"])
-    sme_yoy_val, sme_yoy_col = get_latest_val(latest_row, ["imp_20d_sme_yoy","imp_10d_sme_yoy"])
-
-    exp_label = CHECKPOINT_LABEL.get(exp_col, "—")
-    imp_label = CHECKPOINT_LABEL.get(imp_col, "—")
-    sme_label = CHECKPOINT_LABEL.get(sme_col, "—")
-    is_full   = exp_col == "exp_semi"
-
-    # ── Page header ───────────────────────────────────────────────────────────
+    # ── Monitor period selector ───────────────────────────────────────────────
     st.markdown("""
         <style>
         .kr-header { font-size: 28px; font-weight: 600; margin-bottom: 2px; }
@@ -716,102 +701,173 @@ else:
         }
         .kr-card-label { font-size: 12px; color: #888; margin-bottom: 4px; }
         .kr-card-value { font-size: 26px; font-weight: 600; color: #1a1a1a; }
-        .kr-card-sub { font-size: 13px; margin-top: 4px; }
-        .kr-up   { color: #E74C3C; }
-        .kr-down { color: #378ADD; }
-        .kr-badge {
-            display: inline-block;
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 10px;
-            background: #f0f0f0;
-            color: #555;
-            margin-left: 6px;
-        }
-        .kr-badge-est { background: #fff3cd; color: #856404; }
-        .kr-badge-full { background: #d4edda; color: #155724; }
-        .kr-divider { border-top: 1px solid #eeeeee; margin: 16px 0; }
+        .kr-card-yoy { font-size: 18px; font-weight: 600; margin-top: 6px; }
+        .kr-card-sub { font-size: 12px; color: #aaa; margin-top: 4px; }
+        .kr-up   { color: #1D9E75; }
+        .kr-down { color: #E74C3C; }
+        .kr-flat { color: #888; }
+        .kr-badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#555; margin-left:6px; }
+        .kr-badge-est  { background:#fff3cd; color:#856404; }
+        .kr-badge-full { background:#d4edda; color:#155724; }
+        .kr-divider { border-top:1px solid #eeeeee; margin:16px 0; }
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown(f'<div class="kr-header">🇰🇷 Korea Semiconductor Trade Monitor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="kr-header">🇰🇷 Korea Semiconductor Trade Monitor</div>', unsafe_allow_html=True)
+
+    # Monitor period controls
+    mc1, mc2, mc3 = st.columns([1,1,2])
+    with mc1:
+        monitor_mode = st.radio(
+            "Monitor view",
+            ["Latest", "Select period"],
+            horizontal=False, key="kr_monitor_mode"
+        )
+    with mc2:
+        if monitor_mode == "Select period":
+            all_dates = sorted(kr_df["date"].unique().tolist(), reverse=True)
+            sel_date  = st.selectbox(
+                "Month",
+                options=all_dates,
+                format_func=lambda d: pd.Timestamp(d).strftime("%b %Y"),
+                key="kr_sel_date"
+            )
+            monitor_checkpoint = st.radio(
+                "Checkpoint",
+                ["10-day","20-day","Full month"],
+                horizontal=False, key="kr_mon_cp"
+            )
+        else:
+            sel_date = latest_date
+            monitor_checkpoint = None
+
+    # Get monitor row
+    monitor_date = pd.Timestamp(sel_date) if monitor_mode == "Select period" else latest_date
+    mon_rows = kr_df[kr_df["date"]==monitor_date]
+    if mon_rows.empty:
+        st.warning(f"No data for {monitor_date.strftime('%b %Y')}.")
+        st.stop()
+    mon_row = mon_rows.iloc[0]
+
+    # Determine which columns to use based on checkpoint selection
+    if monitor_mode == "Latest":
+        exp_val, exp_col = get_latest_val(mon_row, ["exp_semi","exp_25d_semi","exp_20d_semi","exp_10d_semi"])
+        exp_yoy, _       = get_latest_val(mon_row, ["exp_20d_semi_yoy","exp_10d_semi_yoy"])
+        imp_val, imp_col = get_latest_val(mon_row, ["imp_20d_semi","imp_10d_semi"])
+        imp_yoy, _       = get_latest_val(mon_row, ["imp_20d_semi_yoy","imp_10d_semi_yoy"])
+        sme_val, sme_col = get_latest_val(mon_row, ["imp_20d_sme","imp_10d_sme"])
+        sme_yoy, _       = get_latest_val(mon_row, ["imp_20d_sme_yoy","imp_10d_sme_yoy"])
+    elif monitor_checkpoint == "10-day":
+        exp_val, exp_col = mon_row.get("exp_10d_semi"), "exp_10d_semi"
+        exp_yoy          = mon_row.get("exp_10d_semi_yoy")
+        imp_val, imp_col = mon_row.get("imp_10d_semi"), "imp_10d_semi"
+        imp_yoy          = mon_row.get("imp_10d_semi_yoy")
+        sme_val, sme_col = mon_row.get("imp_10d_sme"), "imp_10d_sme"
+        sme_yoy          = mon_row.get("imp_10d_sme_yoy")
+    elif monitor_checkpoint == "20-day":
+        exp_val, exp_col = mon_row.get("exp_20d_semi"), "exp_20d_semi"
+        exp_yoy          = mon_row.get("exp_20d_semi_yoy")
+        imp_val, imp_col = mon_row.get("imp_20d_semi"), "imp_20d_semi"
+        imp_yoy          = mon_row.get("imp_20d_semi_yoy")
+        sme_val, sme_col = mon_row.get("imp_20d_sme"), "imp_20d_sme"
+        sme_yoy          = mon_row.get("imp_20d_sme_yoy")
+    else:  # Full month
+        exp_val, exp_col = mon_row.get("exp_semi"), "exp_semi"
+        exp_yoy          = None
+        imp_val, imp_col = mon_row.get("imp_20d_semi"), "imp_20d_semi"
+        imp_yoy          = mon_row.get("imp_20d_semi_yoy")
+        sme_val, sme_col = mon_row.get("imp_20d_sme"), "imp_20d_sme"
+        sme_yoy          = mon_row.get("imp_20d_sme_yoy")
+
+    exp_label = CHECKPOINT_LABEL.get(exp_col, "—") if exp_col else "—"
+    imp_label = CHECKPOINT_LABEL.get(imp_col, "—") if imp_col else "—"
+    sme_label = CHECKPOINT_LABEL.get(sme_col, "—") if sme_col else "—"
+    is_full   = exp_col == "exp_semi"
+
     st.markdown(
-        f'<div class="kr-sub">Semiconductor export & import tracker · '
-        f'Last updated: <b>{latest_date.strftime("%d %b %Y")}</b> · Source: MOTIE / Korea Customs</div>',
+        f'<div class="kr-sub">Last updated: <b>{monitor_date.strftime("%d %b %Y")}</b> · '
+        f'Source: MOTIE / Korea Customs</div>',
         unsafe_allow_html=True
     )
 
     # ── Headline cards ────────────────────────────────────────────────────────
-    def fmt_val(v): return f"USD {v/1000:.1f}bn" if v and v >= 1000 else (f"USD {v:.0f}mn" if v else "—")
-    def fmt_yoy(v):
-        if v is None or pd.isna(v): return "—"
+    def fmt_val(v):
+        if not v or pd.isna(v): return "—"
+        return f"USD {v/1000:.1f}bn" if v >= 1000 else f"USD {v:.0f}mn"
+
+    def fmt_yoy_card(v):
+        if v is None or pd.isna(v): return '<span class="kr-flat">YoY: —</span>'
         arrow = "▲" if v >= 0 else "▼"
         cls   = "kr-up" if v >= 0 else "kr-down"
-        return f'<span class="{cls}">{arrow} {abs(v):.1f}%</span>'
+        sign  = "+" if v >= 0 else ""
+        return f'<span class="{cls}">{arrow} {sign}{v:.1f}% YoY</span>'
+
     def badge(label, full=False):
         cls = "kr-badge-full" if full else "kr-badge-est"
         return f'<span class="kr-badge {cls}">{label}</span>'
 
     c1,c2,c3,c4 = st.columns(4)
+
     with c1:
         st.markdown(f"""
         <div class="kr-card">
             <div class="kr-card-label">Semiconductor Exports {badge(exp_label, is_full)}</div>
             <div class="kr-card-value">{fmt_val(exp_val)}</div>
-            <div class="kr-card-sub">YoY: {fmt_yoy(exp_yoy_val)}</div>
-            <div class="kr-card-sub" style="font-size:11px;color:#aaa;">{latest_date.strftime('%b %Y')}</div>
+            <div class="kr-card-yoy">{fmt_yoy_card(exp_yoy)}</div>
+            <div class="kr-card-sub">{monitor_date.strftime('%b %Y')}</div>
         </div>""", unsafe_allow_html=True)
+
     with c2:
         st.markdown(f"""
         <div class="kr-card">
             <div class="kr-card-label">Semiconductor Imports {badge(imp_label)}</div>
             <div class="kr-card-value">{fmt_val(imp_val)}</div>
-            <div class="kr-card-sub">YoY: {fmt_yoy(imp_yoy_val)}</div>
-            <div class="kr-card-sub" style="font-size:11px;color:#aaa;">{latest_date.strftime('%b %Y')}</div>
+            <div class="kr-card-yoy">{fmt_yoy_card(imp_yoy)}</div>
+            <div class="kr-card-sub">{monitor_date.strftime('%b %Y')}</div>
         </div>""", unsafe_allow_html=True)
+
     with c3:
         st.markdown(f"""
         <div class="kr-card">
             <div class="kr-card-label">SME Imports {badge(sme_label)}</div>
             <div class="kr-card-value">{fmt_val(sme_val)}</div>
-            <div class="kr-card-sub">YoY: {fmt_yoy(sme_yoy_val)}</div>
-            <div class="kr-card-sub" style="font-size:11px;color:#aaa;">{latest_date.strftime('%b %Y')}</div>
+            <div class="kr-card-yoy">{fmt_yoy_card(sme_yoy)}</div>
+            <div class="kr-card-sub">{monitor_date.strftime('%b %Y')}</div>
         </div>""", unsafe_allow_html=True)
+
     with c4:
-        # Trade balance proxy: exports minus imports (20-day)
-        bal = None
-        if exp_val and imp_val:
-            # normalise to same checkpoint basis where possible
-            e20, _ = get_latest_val(latest_row, ["exp_20d_semi","exp_10d_semi"])
-            i20, _ = get_latest_val(latest_row, ["imp_20d_semi","imp_10d_semi"])
-            if e20 and i20: bal = e20 - i20
+        e20 = mon_row.get("exp_20d_semi") or mon_row.get("exp_10d_semi")
+        i20 = mon_row.get("imp_20d_semi") or mon_row.get("imp_10d_semi")
+        bal = (e20 - i20) if (e20 and i20 and pd.notna(e20) and pd.notna(i20)) else None
         bal_color = "#1D9E75" if (bal or 0) >= 0 else "#E74C3C"
-        bal_str   = f'<span style="color:{bal_color}">USD {bal/1000:.1f}bn</span>' if bal else "—"
+        bal_str   = f'<span style="color:{bal_color};font-size:26px;font-weight:600;">{fmt_val(abs(bal)) if bal else "—"}</span>'
+        bal_sign  = "Surplus" if (bal or 0) >= 0 else "Deficit"
         st.markdown(f"""
         <div class="kr-card">
-            <div class="kr-card-label">Trade Balance (Semi Exp − Imp)</div>
-            <div class="kr-card-value">{bal_str}</div>
-            <div class="kr-card-sub" style="font-size:11px;color:#aaa;">20-day basis · {latest_date.strftime('%b %Y')}</div>
+            <div class="kr-card-label">Trade Balance (Exp − Imp)</div>
+            {bal_str}
+            <div class="kr-card-yoy"><span style="color:{bal_color};">{bal_sign}</span></div>
+            <div class="kr-card-sub">Interim basis · {monitor_date.strftime('%b %Y')}</div>
         </div>""", unsafe_allow_html=True)
 
     st.markdown('<div class="kr-divider"></div>', unsafe_allow_html=True)
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
     kr_tab1, kr_tab2, kr_tab3 = st.tabs([
-        "📤 Exports", "📥 Imports & Equipment", "🌏 China Exposure"
+        "📤 Semiconductor Exports",
+        "📥 Imports & Equipment",
+        "🌏 China Exposure"
     ])
 
     # ── Tab 1: Exports ────────────────────────────────────────────────────────
     with kr_tab1:
         st.subheader("Semiconductor Exports (USD millions)")
 
-        # Period selector
         period_opt = st.radio(
             "Data to display",
             ["Full month (where available)", "20-day checkpoint", "10-day checkpoint"],
             horizontal=True, key="kr_exp_period"
         )
-
         if period_opt == "Full month (where available)":
             val_col = "exp_semi"; yoy_src = None
         elif period_opt == "20-day checkpoint":
@@ -819,150 +875,100 @@ else:
         else:
             val_col = "exp_10d_semi"; yoy_src = "exp_10d_semi_yoy"
 
-        exp_ts = kr_df[["date", val_col]].dropna(subset=[val_col]).copy()
-        exp_ts = exp_ts[exp_ts[val_col] > 0]
+        exp_ts = kr_df[["date",val_col]].dropna(subset=[val_col]).copy()
+        exp_ts = exp_ts[exp_ts[val_col]>0].sort_values("date")
 
         if exp_ts.empty:
             st.warning("No data for selected period.")
         else:
-            # Prior year overlay
-            exp_ts = exp_ts.sort_values("date")
             exp_ts["prior_year"] = exp_ts[val_col].shift(12)
-            exp_ts["is_est"] = exp_ts["date"] == latest_date
+            exp_ts["is_est"]     = exp_ts["date"]==latest_date
+            exp_f = kr_date_filter(exp_ts)
 
-            exp_filtered = kr_date_filter(exp_ts)
-
-            kr_ct1 = st.radio("Chart type", ["Line","Bar","Both"], horizontal=True, key="kr_ct1")
-
-            fig_e = go.Figure()
-
-            confirmed = exp_filtered[~exp_filtered["is_est"]]
-            estimated = exp_filtered[exp_filtered["is_est"]]
+            kr_ct1 = st.radio("Chart type",["Line","Bar","Both"],horizontal=True,key="kr_ct1")
+            fig_e  = go.Figure()
+            conf_e = exp_f[~exp_f["is_est"]]; est_e = exp_f[exp_f["is_est"]]
 
             if kr_ct1 in ["Bar","Both"]:
-                fig_e.add_trace(go.Bar(
-                    x=confirmed["date"], y=confirmed[val_col],
-                    name="Exports", marker_color="#1D9E75", opacity=0.7
-                ))
-                if not estimated.empty:
-                    fig_e.add_trace(go.Bar(
-                        x=estimated["date"], y=estimated[val_col],
-                        name="Est.", marker_color="#9B59B6", opacity=0.7
-                    ))
+                fig_e.add_trace(go.Bar(x=conf_e["date"],y=conf_e[val_col],name="Exports",marker_color="#1D9E75",opacity=0.7))
+                if not est_e.empty:
+                    fig_e.add_trace(go.Bar(x=est_e["date"],y=est_e[val_col],name="Est.",marker_color="#9B59B6",opacity=0.7))
             if kr_ct1 in ["Line","Both"]:
-                fig_e.add_trace(go.Scatter(
-                    x=confirmed["date"], y=confirmed[val_col],
-                    name="Exports", line=dict(color="#1D9E75", width=2)
-                ))
-                if not estimated.empty:
-                    fig_e.add_trace(go.Scatter(
-                        x=estimated["date"], y=estimated[val_col],
-                        mode="markers", marker=dict(symbol="diamond", size=10, color="#9B59B6"),
-                        name=f"Est. {latest_date.strftime('%b %Y')}"
-                    ))
-
-            # Prior year dotted overlay
-            prior = exp_filtered.dropna(subset=["prior_year"])
-            if not prior.empty:
-                fig_e.add_trace(go.Scatter(
-                    x=prior["date"], y=prior["prior_year"],
-                    name="Prior year", line=dict(color="#1D9E75", width=1.5, dash="dot"),
-                    opacity=0.5
-                ))
-
-            fig_e.update_layout(
-                hovermode="x unified", plot_bgcolor="white",
-                yaxis=dict(title="USD mn", gridcolor="#eeeeee"),
-                xaxis=dict(gridcolor="#eeeeee"),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_e, use_container_width=True, key="kr_exp_main")
+                fig_e.add_trace(go.Scatter(x=conf_e["date"],y=conf_e[val_col],name="Exports",line=dict(color="#1D9E75",width=2)))
+                if not est_e.empty:
+                    fig_e.add_trace(go.Scatter(x=est_e["date"],y=est_e[val_col],mode="markers",
+                        marker=dict(symbol="diamond",size=10,color="#9B59B6"),name=f"Est. {latest_date.strftime('%b %Y')}"))
+            prior_e = exp_f.dropna(subset=["prior_year"])
+            if not prior_e.empty:
+                fig_e.add_trace(go.Scatter(x=prior_e["date"],y=prior_e["prior_year"],
+                    name="Prior year",line=dict(color="#1D9E75",width=1.5,dash="dot"),opacity=0.5))
+            fig_e.update_layout(hovermode="x unified",plot_bgcolor="white",
+                yaxis=dict(title="USD mn",gridcolor="#eeeeee"),xaxis=dict(gridcolor="#eeeeee"),
+                legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
+            st.plotly_chart(fig_e,use_container_width=True,key="kr_exp_main")
 
             # YoY chart
             if yoy_src:
-                yoy_ts = kr_df[["date", yoy_src]].dropna(subset=[yoy_src]).copy()
-                yoy_ts = kr_date_filter(yoy_ts)
-                if not yoy_ts.empty:
-                    colors_y = ["#1D9E75" if (v or 0) >= 0 else "#E74C3C" for v in yoy_ts[yoy_src]]
+                yoy_f = kr_date_filter(kr_df[["date",yoy_src]].dropna(subset=[yoy_src]).copy())
+                if not yoy_f.empty:
+                    cy = ["#1D9E75" if (v or 0)>=0 else "#E74C3C" for v in yoy_f[yoy_src]]
                     fig_ey = go.Figure()
-                    fig_ey.add_trace(go.Bar(x=yoy_ts["date"], y=yoy_ts[yoy_src], marker_color=colors_y, opacity=0.8, name="YoY %"))
-                    fig_ey.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-                    fig_ey.update_layout(
-                        title=f"Export YoY % ({period_opt})",
-                        hovermode="x unified", plot_bgcolor="white",
-                        yaxis=dict(title="YoY %", gridcolor="#eeeeee", zeroline=True, zerolinecolor="#cccccc"),
-                        xaxis=dict(gridcolor="#eeeeee")
-                    )
-                    st.plotly_chart(fig_ey, use_container_width=True, key="kr_exp_yoy")
+                    fig_ey.add_trace(go.Bar(x=yoy_f["date"],y=yoy_f[yoy_src],marker_color=cy,opacity=0.8,name="YoY %"))
+                    fig_ey.add_hline(y=0,line_dash="dash",line_color="gray",opacity=0.5)
+                    fig_ey.update_layout(title=f"Export YoY % ({period_opt})",hovermode="x unified",plot_bgcolor="white",
+                        yaxis=dict(title="YoY %",gridcolor="#eeeeee",zeroline=True,zerolinecolor="#cccccc"),xaxis=dict(gridcolor="#eeeeee"))
+                    st.plotly_chart(fig_ey,use_container_width=True,key="kr_exp_yoy")
             else:
-                # Compute YoY from full month
                 exp_full = kr_df[["date","exp_semi"]].dropna(subset=["exp_semi"]).copy()
                 exp_full = exp_full[exp_full["exp_semi"]>0].sort_values("date")
                 exp_full["yoy"] = exp_full["exp_semi"].pct_change(12)*100
                 exp_full = kr_date_filter(exp_full).dropna(subset=["yoy"])
                 if not exp_full.empty:
-                    colors_y = ["#1D9E75" if (v or 0)>=0 else "#E74C3C" for v in exp_full["yoy"]]
+                    cy2 = ["#1D9E75" if (v or 0)>=0 else "#E74C3C" for v in exp_full["yoy"]]
                     fig_ey2 = go.Figure()
-                    fig_ey2.add_trace(go.Bar(x=exp_full["date"], y=exp_full["yoy"], marker_color=colors_y, opacity=0.8, name="YoY %"))
-                    fig_ey2.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
-                    fig_ey2.update_layout(
-                        title="Export YoY % (full month)",
-                        hovermode="x unified", plot_bgcolor="white",
-                        yaxis=dict(title="YoY %", gridcolor="#eeeeee", zeroline=True, zerolinecolor="#cccccc"),
-                        xaxis=dict(gridcolor="#eeeeee")
-                    )
-                    st.plotly_chart(fig_ey2, use_container_width=True, key="kr_exp_yoy2")
+                    fig_ey2.add_trace(go.Bar(x=exp_full["date"],y=exp_full["yoy"],marker_color=cy2,opacity=0.8,name="YoY %"))
+                    fig_ey2.add_hline(y=0,line_dash="dash",line_color="gray",opacity=0.5)
+                    fig_ey2.update_layout(title="Export YoY % (full month)",hovermode="x unified",plot_bgcolor="white",
+                        yaxis=dict(title="YoY %",gridcolor="#eeeeee",zeroline=True,zerolinecolor="#cccccc"),xaxis=dict(gridcolor="#eeeeee"))
+                    st.plotly_chart(fig_ey2,use_container_width=True,key="kr_exp_yoy2")
 
-            # Data table
             st.markdown("**Data Table**")
-            tbl_e = kr_date_filter(kr_df[["date","exp_semi","exp_10d_semi","exp_10d_semi_yoy","exp_20d_semi","exp_20d_semi_yoy","exp_25d_semi"]].copy()).sort_values("date",ascending=False)
+            tbl_e = kr_date_filter(kr_df[["date","exp_semi","exp_10d_semi","exp_10d_semi_yoy",
+                                            "exp_20d_semi","exp_20d_semi_yoy","exp_25d_semi"]].copy()).sort_values("date",ascending=False)
             tbl_e["status"] = tbl_e["date"].apply(lambda d: "⚠️ Est." if d==latest_date and not is_full else ("✅" if d==latest_date else ""))
             for col in ["exp_semi","exp_10d_semi","exp_20d_semi","exp_25d_semi"]:
                 tbl_e[col] = tbl_e[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "—")
-            st.dataframe(
-                tbl_e.rename(columns={
-                    "date":"Month","status":"Status",
-                    "exp_semi":"Full Month","exp_10d_semi":"10-Day",
-                    "exp_10d_semi_yoy":"10D YoY%","exp_20d_semi":"20-Day",
-                    "exp_20d_semi_yoy":"20D YoY%","exp_25d_semi":"25-Day"
-                }),
+            st.dataframe(tbl_e.rename(columns={"date":"Month","status":"Status","exp_semi":"Full Month",
+                "exp_10d_semi":"10-Day","exp_10d_semi_yoy":"10D YoY%","exp_20d_semi":"20-Day",
+                "exp_20d_semi_yoy":"20D YoY%","exp_25d_semi":"25-Day"}),
                 column_config={
-                    "Month":    st.column_config.DateColumn("Month", format="MMM-YYYY"),
-                    "10D YoY%": st.column_config.NumberColumn("10D YoY%", format="%.1f%%"),
-                    "20D YoY%": st.column_config.NumberColumn("20D YoY%", format="%.1f%%"),
-                },
-                use_container_width=True
-            )
-            st.caption(f"All values USD millions · ⚠️ Est. = month in progress · Last updated: {latest_date.strftime('%d %b %Y')}")
+                    "Month":    st.column_config.DateColumn("Month",format="MMM-YYYY"),
+                    "10D YoY%": st.column_config.NumberColumn(format="%.1f%%"),
+                    "20D YoY%": st.column_config.NumberColumn(format="%.1f%%"),
+                }, use_container_width=True)
+            st.caption(f"All values USD millions · Last updated: {latest_date.strftime('%d %b %Y')}")
 
     # ── Tab 2: Imports & Equipment ────────────────────────────────────────────
     with kr_tab2:
         st.subheader("Semiconductor Imports & Equipment (USD millions)")
         st.caption("SME = Semiconductor Manufacturing Equipment. Rising SME imports signal capacity expansion 6-12 months ahead.")
 
-        period_opt2 = st.radio(
-            "Data to display",
-            ["20-day checkpoint", "10-day checkpoint"],
-            horizontal=True, key="kr_imp_period"
-        )
+        period_opt2 = st.radio("Data to display",["20-day checkpoint","10-day checkpoint"],horizontal=True,key="kr_imp_period")
         if period_opt2 == "20-day checkpoint":
-            imp_vc = "imp_20d_semi"; imp_yc = "imp_20d_semi_yoy"
-            sme_vc = "imp_20d_sme";  sme_yc = "imp_20d_sme_yoy"
+            imp_vc="imp_20d_semi"; imp_yc="imp_20d_semi_yoy"; sme_vc="imp_20d_sme"; sme_yc="imp_20d_sme_yoy"
         else:
-            imp_vc = "imp_10d_semi"; imp_yc = "imp_10d_semi_yoy"
-            sme_vc = "imp_10d_sme";  sme_yc = "imp_10d_sme_yoy"
+            imp_vc="imp_10d_semi"; imp_yc="imp_10d_semi_yoy"; sme_vc="imp_10d_sme"; sme_yc="imp_10d_sme_yoy"
 
-        # Semi imports
         st.markdown("### Semiconductor Imports")
-        imp_ts = kr_df[["date", imp_vc]].dropna(subset=[imp_vc]).copy()
+        imp_ts = kr_df[["date",imp_vc]].dropna(subset=[imp_vc]).copy()
         imp_ts = imp_ts[imp_ts[imp_vc]>0].sort_values("date")
         imp_ts["prior_year"] = imp_ts[imp_vc].shift(12)
-        imp_ts["is_est"] = imp_ts["date"]==latest_date
+        imp_ts["is_est"]     = imp_ts["date"]==latest_date
         imp_f = kr_date_filter(imp_ts)
 
         if not imp_f.empty:
             kr_ct2 = st.radio("Chart type",["Line","Bar","Both"],horizontal=True,key="kr_ct2")
-            fig_i = go.Figure()
+            fig_i  = go.Figure()
             conf_i = imp_f[~imp_f["is_est"]]; est_i = imp_f[imp_f["is_est"]]
             if kr_ct2 in ["Bar","Both"]:
                 fig_i.add_trace(go.Bar(x=conf_i["date"],y=conf_i[imp_vc],name="Semi Imports",marker_color="#378ADD",opacity=0.7))
@@ -982,9 +988,7 @@ else:
                 legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
             st.plotly_chart(fig_i,use_container_width=True,key="kr_imp_main")
 
-            # Import YoY
-            iy_ts = kr_df[["date",imp_yc]].dropna(subset=[imp_yc]).copy()
-            iy_f  = kr_date_filter(iy_ts)
+            iy_f = kr_date_filter(kr_df[["date",imp_yc]].dropna(subset=[imp_yc]).copy())
             if not iy_f.empty:
                 ci = ["#1D9E75" if (v or 0)>=0 else "#E74C3C" for v in iy_f[imp_yc]]
                 fig_iy = go.Figure()
@@ -995,17 +999,15 @@ else:
                 st.plotly_chart(fig_iy,use_container_width=True,key="kr_imp_yoy")
 
         st.divider()
-
-        # SME imports
         st.markdown("### Equipment (SME) Imports")
         sme_ts = kr_df[["date",sme_vc]].dropna(subset=[sme_vc]).copy()
         sme_ts = sme_ts[sme_ts[sme_vc]>0].sort_values("date")
         sme_ts["prior_year"] = sme_ts[sme_vc].shift(12)
-        sme_ts["is_est"] = sme_ts["date"]==latest_date
+        sme_ts["is_est"]     = sme_ts["date"]==latest_date
         sme_f = kr_date_filter(sme_ts)
 
         if not sme_f.empty:
-            fig_s = go.Figure()
+            fig_s  = go.Figure()
             conf_s = sme_f[~sme_f["is_est"]]; est_s = sme_f[sme_f["is_est"]]
             fig_s.add_trace(go.Bar(x=conf_s["date"],y=conf_s[sme_vc],name="SME Imports",marker_color="#E8642A",opacity=0.7))
             if not est_s.empty:
@@ -1019,9 +1021,7 @@ else:
                 legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
             st.plotly_chart(fig_s,use_container_width=True,key="kr_sme_main")
 
-            # SME YoY
-            sy_ts = kr_df[["date",sme_yc]].dropna(subset=[sme_yc]).copy()
-            sy_f  = kr_date_filter(sy_ts)
+            sy_f = kr_date_filter(kr_df[["date",sme_yc]].dropna(subset=[sme_yc]).copy())
             if not sy_f.empty:
                 cs = ["#1D9E75" if (v or 0)>=0 else "#E74C3C" for v in sy_f[sme_yc]]
                 fig_sy = go.Figure()
@@ -1032,10 +1032,8 @@ else:
                 st.plotly_chart(fig_sy,use_container_width=True,key="kr_sme_yoy")
 
         st.divider()
-
-        # Dual-axis comparison
-        st.markdown("### Semi Imports vs SME — Side by Side")
-        st.caption("SME rising while semi imports flat = capacity build without demand pull. Both rising = full cycle expansion.")
+        st.markdown("### Semi Imports vs SME — Dual Axis")
+        st.caption("SME rising while semi imports flat = capacity build without demand pull. Both rising = full expansion.")
         dual = kr_date_filter(kr_df[["date",imp_vc,sme_vc]].dropna(subset=[imp_vc,sme_vc]).copy())
         if not dual.empty:
             dual["is_est"] = dual["date"]==latest_date
@@ -1045,9 +1043,9 @@ else:
             est_d = dual[dual["is_est"]]
             if not est_d.empty:
                 fig_d.add_trace(go.Scatter(x=est_d["date"],y=est_d[imp_vc],mode="markers",
-                    marker=dict(symbol="diamond",size=10,color="#378ADD"),name="Est. Semi",showlegend=True))
+                    marker=dict(symbol="diamond",size=10,color="#378ADD"),name="Est. Semi"))
                 fig_d.add_trace(go.Scatter(x=est_d["date"],y=est_d[sme_vc],mode="markers",
-                    marker=dict(symbol="diamond",size=10,color="#E8642A"),name="Est. SME",showlegend=True,yaxis="y2"))
+                    marker=dict(symbol="diamond",size=10,color="#E8642A"),name="Est. SME",yaxis="y2"))
             fig_d.update_layout(
                 yaxis=dict(title="Semi Imports (USD mn)",gridcolor="#eeeeee"),
                 yaxis2=dict(title="SME Imports (USD mn)",overlaying="y",side="right",gridcolor="#eeeeee"),
@@ -1055,109 +1053,73 @@ else:
                 legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
             st.plotly_chart(fig_d,use_container_width=True,key="kr_dual")
 
-        # Data table
         st.markdown("**Data Table**")
         tbl_i = kr_date_filter(kr_df[["date","imp_10d_semi","imp_10d_sme","imp_10d_semi_yoy","imp_10d_sme_yoy",
                                         "imp_20d_semi","imp_20d_sme","imp_20d_semi_yoy","imp_20d_sme_yoy"]].copy()).sort_values("date",ascending=False)
         for col in ["imp_10d_semi","imp_10d_sme","imp_20d_semi","imp_20d_sme"]:
             tbl_i[col] = tbl_i[col].apply(lambda x: f"{x:,.1f}" if pd.notna(x) else "—")
-        st.dataframe(
-            tbl_i.rename(columns={
-                "date":"Month","imp_10d_semi":"10D Semi","imp_10d_sme":"10D SME",
-                "imp_10d_semi_yoy":"10D Semi YoY%","imp_10d_sme_yoy":"10D SME YoY%",
-                "imp_20d_semi":"20D Semi","imp_20d_sme":"20D SME",
-                "imp_20d_semi_yoy":"20D Semi YoY%","imp_20d_sme_yoy":"20D SME YoY%",
-            }),
+        st.dataframe(tbl_i.rename(columns={"date":"Month","imp_10d_semi":"10D Semi","imp_10d_sme":"10D SME",
+            "imp_10d_semi_yoy":"10D Semi YoY%","imp_10d_sme_yoy":"10D SME YoY%",
+            "imp_20d_semi":"20D Semi","imp_20d_sme":"20D SME",
+            "imp_20d_semi_yoy":"20D Semi YoY%","imp_20d_sme_yoy":"20D SME YoY%"}),
             column_config={
-                "Month":          st.column_config.DateColumn("Month", format="MMM-YYYY"),
+                "Month":          st.column_config.DateColumn("Month",format="MMM-YYYY"),
                 "10D Semi YoY%":  st.column_config.NumberColumn(format="%.1f%%"),
                 "10D SME YoY%":   st.column_config.NumberColumn(format="%.1f%%"),
                 "20D Semi YoY%":  st.column_config.NumberColumn(format="%.1f%%"),
                 "20D SME YoY%":   st.column_config.NumberColumn(format="%.1f%%"),
-            },
-            use_container_width=True
-        )
+            }, use_container_width=True)
         st.caption(f"All values USD millions · SME = Semiconductor Manufacturing Equipment · Last updated: {latest_date.strftime('%d %b %Y')}")
 
     # ── Tab 3: China Exposure ─────────────────────────────────────────────────
     with kr_tab3:
-        st.subheader("China Exposure — Export & Import Destination")
-        st.caption(
-            "China share = China-bound exports as % of total interim exports. "
-            "Declining share may signal trade diversion to US, ASEAN, or other markets."
-        )
+        st.subheader("China Exposure (USD millions)")
+        st.caption("China share = China-bound exports as % of total interim exports. Declining share may signal trade diversion.")
 
-        period_opt3 = st.radio(
-            "Checkpoint",
-            ["20-day", "10-day"],
-            horizontal=True, key="kr_china_period"
-        )
+        period_opt3 = st.radio("Checkpoint",["20-day","10-day"],horizontal=True,key="kr_china_period")
         if period_opt3 == "20-day":
-            e_tot = "exp_20d_semi"; e_cn = "exp_20d_china"
-            i_cn  = "imp_20d_china"
+            e_tot="exp_20d_semi"; e_cn="exp_20d_china"; i_tot="imp_20d_semi"; i_cn="imp_20d_china"
         else:
-            e_tot = "exp_10d_semi"; e_cn = "exp_10d_china"
-            i_cn  = "imp_10d_china"
+            e_tot="exp_10d_semi"; e_cn="exp_10d_china"; i_tot="imp_10d_semi"; i_cn="imp_10d_china"
 
-        # Export China share
-        china_e = kr_df[["date", e_tot, e_cn]].dropna(subset=[e_tot, e_cn]).copy()
+        st.markdown("### Export Destination: China vs Non-China")
+        china_e = kr_df[["date",e_tot,e_cn]].dropna(subset=[e_tot,e_cn]).copy()
         china_e = china_e[(china_e[e_tot]>0)&(china_e[e_cn]>0)].sort_values("date")
-        china_e["china_share"] = china_e[e_cn] / china_e[e_tot] * 100
-        china_e["non_china"]   = china_e[e_tot] - china_e[e_cn]
-        china_e["is_est"]      = china_e["date"] == latest_date
+        china_e["china_share"] = china_e[e_cn]/china_e[e_tot]*100
+        china_e["non_china"]   = china_e[e_tot]-china_e[e_cn]
         china_ef = kr_date_filter(china_e)
 
         if not china_ef.empty:
-            # Stacked bar: China vs Non-China
-            st.markdown("### Export Destination: China vs Non-China")
             fig_ce = go.Figure()
-            fig_ce.add_trace(go.Bar(
-                x=china_ef["date"], y=china_ef[e_cn],
-                name="China", marker_color="#E74C3C", opacity=0.8
-            ))
-            fig_ce.add_trace(go.Bar(
-                x=china_ef["date"], y=china_ef["non_china"],
-                name="Non-China", marker_color="#378ADD", opacity=0.8
-            ))
-            fig_ce.update_layout(
-                barmode="stack", hovermode="x unified", plot_bgcolor="white",
-                yaxis=dict(title="USD mn", gridcolor="#eeeeee"),
-                xaxis=dict(gridcolor="#eeeeee"),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            st.plotly_chart(fig_ce, use_container_width=True, key="kr_china_stack")
+            fig_ce.add_trace(go.Bar(x=china_ef["date"],y=china_ef[e_cn],name="China",marker_color="#E74C3C",opacity=0.8))
+            fig_ce.add_trace(go.Bar(x=china_ef["date"],y=china_ef["non_china"],name="Non-China",marker_color="#378ADD",opacity=0.8))
+            fig_ce.update_layout(barmode="stack",hovermode="x unified",plot_bgcolor="white",
+                yaxis=dict(title="USD mn",gridcolor="#eeeeee"),xaxis=dict(gridcolor="#eeeeee"),
+                legend=dict(orientation="h",yanchor="bottom",y=1.02,xanchor="right",x=1))
+            st.plotly_chart(fig_ce,use_container_width=True,key="kr_china_stack")
 
-            # China share % line
             fig_cs = go.Figure()
-            fig_cs.add_trace(go.Scatter(
-                x=china_ef["date"], y=china_ef["china_share"],
-                name="China share %", line=dict(color="#E74C3C", width=2),
-                fill="tozeroy", fillcolor="rgba(231,76,60,0.08)"
-            ))
-            fig_cs.update_layout(
-                title="China's Share of Semiconductor Exports (%)",
-                hovermode="x unified", plot_bgcolor="white",
-                yaxis=dict(title="%", gridcolor="#eeeeee", range=[0,100]),
-                xaxis=dict(gridcolor="#eeeeee")
-            )
-            st.plotly_chart(fig_cs, use_container_width=True, key="kr_china_share")
+            fig_cs.add_trace(go.Scatter(x=china_ef["date"],y=china_ef["china_share"],
+                name="China share %",line=dict(color="#E74C3C",width=2),
+                fill="tozeroy",fillcolor="rgba(231,76,60,0.08)"))
+            fig_cs.update_layout(title="China's Share of Semiconductor Exports (%)",
+                hovermode="x unified",plot_bgcolor="white",
+                yaxis=dict(title="%",gridcolor="#eeeeee",range=[0,100]),xaxis=dict(gridcolor="#eeeeee"))
+            st.plotly_chart(fig_cs,use_container_width=True,key="kr_china_share")
         else:
-            st.warning("No China export destination data available for selected period.")
+            st.warning("No China export data available for selected period.")
 
-        # Import China share
         st.divider()
         st.markdown("### Import Origin: China vs Non-China")
-        china_i = kr_df[["date", imp_vc if period_opt3=="20-day" else "imp_10d_semi", i_cn]].copy()
-        china_i.columns = ["date","imp_total","imp_china"]
-        china_i = china_i.dropna().copy()
-        china_i = china_i[(china_i["imp_total"]>0)&(china_i["imp_china"]>0)].sort_values("date")
-        china_i["non_china"]   = china_i["imp_total"] - china_i["imp_china"]
-        china_i["china_share"] = china_i["imp_china"] / china_i["imp_total"] * 100
+        china_i = kr_df[["date",i_tot,i_cn]].dropna(subset=[i_tot,i_cn]).copy()
+        china_i = china_i[(china_i[i_tot]>0)&(china_i[i_cn]>0)].sort_values("date")
+        china_i["non_china"]   = china_i[i_tot]-china_i[i_cn]
+        china_i["china_share"] = china_i[i_cn]/china_i[i_tot]*100
         china_if = kr_date_filter(china_i)
 
         if not china_if.empty:
             fig_ci = go.Figure()
-            fig_ci.add_trace(go.Bar(x=china_if["date"],y=china_if["imp_china"],name="China",marker_color="#E74C3C",opacity=0.8))
+            fig_ci.add_trace(go.Bar(x=china_if["date"],y=china_if[i_cn],name="China",marker_color="#E74C3C",opacity=0.8))
             fig_ci.add_trace(go.Bar(x=china_if["date"],y=china_if["non_china"],name="Non-China",marker_color="#378ADD",opacity=0.8))
             fig_ci.update_layout(barmode="stack",hovermode="x unified",plot_bgcolor="white",
                 yaxis=dict(title="USD mn",gridcolor="#eeeeee"),xaxis=dict(gridcolor="#eeeeee"),
@@ -1170,10 +1132,9 @@ else:
                 fill="tozeroy",fillcolor="rgba(155,89,182,0.08)"))
             fig_cis.update_layout(title="China's Share of Semiconductor Imports (%)",
                 hovermode="x unified",plot_bgcolor="white",
-                yaxis=dict(title="%",gridcolor="#eeeeee",range=[0,100]),
-                xaxis=dict(gridcolor="#eeeeee"))
+                yaxis=dict(title="%",gridcolor="#eeeeee",range=[0,100]),xaxis=dict(gridcolor="#eeeeee"))
             st.plotly_chart(fig_cis,use_container_width=True,key="kr_china_imp_share")
         else:
-            st.warning("No China import origin data available for selected period.")
+            st.warning("No China import data available for selected period.")
 
         st.caption(f"All values USD millions · Last updated: {latest_date.strftime('%d %b %Y')}")
