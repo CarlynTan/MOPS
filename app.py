@@ -93,7 +93,7 @@ def get_engine():
         f"@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres"
     )
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1)
 def load_revenue():
     engine = get_engine()
     df = pd.read_sql("SELECT stock_id, report_month, rev_current, yoy_pct, mom_pct FROM monthly_revenue ORDER BY stock_id, report_month", engine)
@@ -109,7 +109,7 @@ def load_revenue():
     df["date"] = df["report_month"].apply(roc)
     return df.dropna(subset=["date"])
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1)
 def load_prices():
     engine = get_engine()
     s1 = "','".join([f"{k}.TW"  for k in WATCHLIST])
@@ -120,7 +120,7 @@ def load_prices():
     df["month"] = df["date"].dt.to_period("M").dt.to_timestamp()
     return df.groupby(["stock_id","month"]).agg(m_open=("open","first"),m_close=("close","last")).reset_index()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1)
 def load_annual():
     engine = get_engine()
     syms = "','".join([f"{k}.TW" for k in WATCHLIST]+[f"{k}.TWO" for k in WATCHLIST])
@@ -130,7 +130,7 @@ def load_annual():
     df["annual_return"] = ((df["year_close"]-df["year_open"])/df["year_open"]*100).round(1)
     return df
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1)
 def load_fx():
     try:
         engine = get_engine()
@@ -139,7 +139,7 @@ def load_fx():
         return df
     except: return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=1)
 def load_korea():
     try:
         engine = get_engine()
