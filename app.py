@@ -331,7 +331,10 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
             lf = fx_df.sort_values("month").iloc[-1]
             st.info(f"💱 Latest FX: **1 USD = {lf['twd_per_usd']:.4f} TWD** (as of {lf['month'].strftime('%b %Y')})  \n**Methodology:** Monthly TWD revenue ÷ monthly avg TWD/USD rate (Yahoo Finance: TWD=X).")
             base2 = rev_df[rev_df["stock_id"].isin(selected)].copy()
-            base2 = base2.merge(fx_df.rename(columns={"month":"date"}),on="date",how="left")
+            base2["date"] = base2["date"].dt.to_period("M").dt.to_timestamp()
+            fx_aligned = fx_df.copy()
+            fx_aligned["date"] = fx_aligned["month"].dt.to_period("M").dt.to_timestamp()
+            base2 = base2.merge(fx_aligned[["date","twd_per_usd"]], on="date", how="left")
             base2["rev_usd"] = base2["rev_current"]/base2["twd_per_usd"]/1000
             base2 = aggregate_if_needed(base2,"rev_usd",group_sum)
             f2 = apply_date_filter(base2)
@@ -350,7 +353,10 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
         if fx_df.empty: st.error("FX data not available.")
         else:
             base3 = rev_df[rev_df["stock_id"].isin(selected)].copy()
-            base3 = base3.merge(fx_df.rename(columns={"month":"date"}),on="date",how="left")
+            base3["date"] = base3["date"].dt.to_period("M").dt.to_timestamp()
+            fx_aligned2 = fx_df.copy()
+            fx_aligned2["date"] = fx_aligned2["month"].dt.to_period("M").dt.to_timestamp()
+            base3 = base3.merge(fx_aligned2[["date","twd_per_usd"]], on="date", how="left")
             base3["rev_usd"] = base3["rev_current"]/base3["twd_per_usd"]/1000
             f3t = apply_date_filter(aggregate_if_needed(base3.copy(),"rev_current",group_sum))
             f3u = apply_date_filter(aggregate_if_needed(base3.copy(),"rev_usd",group_sum))
