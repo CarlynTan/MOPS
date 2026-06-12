@@ -212,9 +212,15 @@ if dashboard == "🇹🇼 Taiwan Semi Monitor":
 
     def aggregate_if_needed(df, rev_col, do_sum, label="Sector Total"):
         if not do_sum: return df
-        num_cols = [c for c in [rev_col,"yoy_pct","mom_pct"] if c in df.columns]
-        agg = df.groupby("date")[num_cols].sum().reset_index()
-        agg["company"] = label; agg["company_full"] = label; agg["stock_id"] = "SUM"
+        # Sum revenue only — never sum % columns
+        agg = df.groupby("date")[[rev_col]].sum().reset_index()
+        agg["company"] = label
+        agg["company_full"] = label
+        agg["stock_id"] = "SUM"
+        # Recalculate YoY and MoM from the summed revenue
+        agg = agg.sort_values("date")
+        agg["yoy_pct"] = agg[rev_col].pct_change(12) * 100
+        agg["mom_pct"] = agg[rev_col].pct_change(1) * 100
         return agg
 
     def render_rev_table(base_df, rev_col, unit_label, s3a, s6a, s3y, s6y, fmt="0f"):
